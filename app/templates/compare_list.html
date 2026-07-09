@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Ortam Karşılaştırmaları · {{ project.name }} · CMSPlus{% endblock %}
+
+{% block content %}
+<a href="/projects/{{ project.id }}" class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 mb-4 transition">
+  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+    <path fill-rule="evenodd" d="M12.79 4.21a.75.75 0 0 1 0 1.06L8.06 10l4.73 4.73a.75.75 0 1 1-1.06 1.06l-5.26-5.26a.75.75 0 0 1 0-1.06l5.26-5.26a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" />
+  </svg>
+  {{ project.name }}'a dön
+</a>
+
+<div class="flex items-center justify-between mb-6 flex-wrap gap-3">
+  <div>
+    <h1 class="text-2xl font-bold text-slate-900">Ortam Karşılaştırmaları</h1>
+    <p class="text-slate-500 text-sm mt-1">{{ project.name }} projesindeki ortamların görsel karşılaştırma geçmişi</p>
+  </div>
+  {% if project.environments|length >= 2 %}
+  <a href="/projects/{{ project.id }}/compare/new"
+     class="inline-flex items-center gap-1.5 bg-brand-600 text-white text-sm font-medium px-4 py-2.5 rounded-lg shadow-sm hover:bg-brand-700 hover:shadow transition">
+    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+      <path d="M10 4a1 1 0 0 1 1 1v4h4a1 1 0 1 1 0 2h-4v4a1 1 0 1 1-2 0v-4H5a1 1 0 1 1 0-2h4V5a1 1 0 0 1 1-1Z" />
+    </svg>
+    Yeni Karşılaştırma
+  </a>
+  {% endif %}
+</div>
+
+{% if comparisons %}
+<div class="space-y-3">
+  {% for comparison in comparisons %}
+  <a href="/projects/{{ project.id }}/compare/{{ comparison.id }}"
+     class="block bg-white border border-slate-200 rounded-xl p-4 hover:border-slate-300 hover:shadow-sm transition">
+    <div class="flex items-center justify-between gap-4 flex-wrap">
+      <div class="min-w-0">
+        <p class="font-semibold text-slate-900">
+          {{ comparison.environment_a.name }} <span class="text-slate-400 font-normal">vs</span> {{ comparison.environment_b.name }}
+        </p>
+        <p class="text-xs text-slate-400 mt-0.5">
+          {{ comparison.created_at.strftime('%d.%m.%Y %H:%M') }} · {{ comparison.pages|length }} sayfa
+        </p>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        {% set diff_count = comparison.pages|selectattr('has_differences')|list|length %}
+        {% if diff_count > 0 %}
+        <span class="text-xs font-medium text-red-700 bg-red-50 px-2.5 py-1 rounded-full whitespace-nowrap">{{ diff_count }} sayfada fark</span>
+        {% else %}
+        <span class="text-xs font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full whitespace-nowrap">Fark yok</span>
+        {% endif %}
+        <span class="text-sm font-medium text-brand-600">Detaylar →</span>
+      </div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="bg-white border border-dashed border-slate-300 rounded-2xl p-14 text-center">
+  <p class="text-slate-500">Henüz hiç karşılaştırma yapılmadı.</p>
+  {% if project.environments|length >= 2 %}
+  <a href="/projects/{{ project.id }}/compare/new" class="inline-flex items-center gap-1.5 mt-4 text-sm font-medium text-brand-600 hover:text-brand-700">
+    İlk karşılaştırmayı yap →
+  </a>
+  {% else %}
+  <p class="text-slate-400 text-sm mt-1">Karşılaştırma yapabilmek için projede en az 2 ortam olmalı.</p>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

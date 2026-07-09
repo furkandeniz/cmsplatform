@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cmsplus
+      POSTGRES_PASSWORD: cmsplus
+      POSTGRES_DB: cmsplus
+    ports:
+      - "5432:5432"
+    volumes:
+      - cmsplus_pgdata:/var/lib/postgresql/data
+
+volumes:
+  cmsplus_pgdata:

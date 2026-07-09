@@ -1,0 +1,448 @@
+{% extends "base.html" %}
+
+{% macro lh_color(score) -%}
+{%- if score is none -%}text-slate-400
+{%- elif score >= 90 -%}text-emerald-600
+{%- elif score >= 50 -%}text-amber-600
+{%- else -%}text-red-600
+{%- endif -%}
+{%- endmacro %}
+
+{% block title %}{{ environment.name }} · {{ project.name }} · CMSPlus{% endblock %}
+
+{% block content %}
+<a href="/projects/{{ project.id }}" class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 mb-4 transition">
+  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+    <path fill-rule="evenodd" d="M12.79 4.21a.75.75 0 0 1 0 1.06L8.06 10l4.73 4.73a.75.75 0 1 1-1.06 1.06l-5.26-5.26a.75.75 0 0 1 0-1.06l5.26-5.26a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" />
+  </svg>
+  {{ project.name }}'a dön
+</a>
+
+<div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+  <div class="flex items-start justify-between gap-4 flex-wrap">
+    <div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <h1 class="text-xl font-bold text-slate-900">{{ environment.name }}</h1>
+        {% if environment.is_primary %}
+        <span class="text-xs font-medium bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full whitespace-nowrap">Birincil</span>
+        {% endif %}
+        {% if environment.drupal_version %}
+        <span class="text-xs font-medium bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full whitespace-nowrap">
+          Drupal {{ environment.drupal_version }}
+        </span>
+        {% endif %}
+      </div>
+      <a href="{{ environment.url }}" target="_blank" rel="noopener noreferrer"
+         class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-brand-600 transition break-all mt-1">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M12.9 6.1a3 3 0 0 1 0 4.24l-2.5 2.5a3 3 0 0 1-4.5-3.96l.35-.35a.75.75 0 0 1 1.06 1.06l-.35.35a1.5 1.5 0 0 0 2.12 2.12l2.5-2.5a1.5 1.5 0 0 0-2.12-2.12.75.75 0 1 1-1.06-1.06 3 3 0 0 1 4.5 0Z" />
+          <path d="M7.1 13.9a3 3 0 0 1 0-4.24l2.5-2.5a3 3 0 0 1 4.5 3.96l-.35.35a.75.75 0 1 1-1.06-1.06l.35-.35a1.5 1.5 0 0 0-2.12-2.12l-2.5 2.5a1.5 1.5 0 0 0 2.12 2.12.75.75 0 1 1 1.06 1.06 3 3 0 0 1-4.5 0Z" />
+        </svg>
+        {{ environment.url }}
+      </a>
+    </div>
+
+    <div class="flex items-center gap-1 shrink-0">
+      {% if not environment.is_primary %}
+      <form method="post" action="/projects/{{ project.id }}/environments/{{ environment.id }}/set-primary">
+        <button type="submit"
+                class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-100 px-3 py-2 rounded-lg transition">
+          Birincil yap
+        </button>
+      </form>
+      {% endif %}
+      <a href="/projects/{{ project.id }}/environments/{{ environment.id }}/edit"
+         class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-100 px-3 py-2 rounded-lg transition">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M13.586 3.586a2 2 0 1 1 2.828 2.828l-.793.793-2.828-2.828.793-.793ZM11.379 5.793 3 14.172V17h2.828l8.38-8.379-2.83-2.828Z" />
+        </svg>
+        Düzenle
+      </a>
+      <button type="button"
+              class="inline-flex items-center gap-1.5 text-sm font-medium text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg transition"
+              data-project-id="{{ project.id }}" data-env-id="{{ environment.id }}" data-env-name="{{ environment.name }}"
+              onclick="openDeleteEnvModal(this)">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M8.75 1a.75.75 0 0 0-.75.75V3H4a.75.75 0 0 0 0 1.5h.28l.7 10.48A2.25 2.25 0 0 0 7.22 17h5.56a2.25 2.25 0 0 0 2.24-2.02l.7-10.48H16A.75.75 0 0 0 16 3h-4v-.25a.75.75 0 0 0-.75-.75h-2.5ZM8.5 7.25a.75.75 0 0 1 1.5 0v6.5a.75.75 0 0 1-1.5 0v-6.5Zm3.5 0a.75.75 0 0 1 1.5 0v6.5a.75.75 0 0 1-1.5 0v-6.5Z" clip-rule="evenodd" />
+        </svg>
+        Sil
+      </button>
+    </div>
+  </div>
+
+  <div class="grid gap-3 sm:grid-cols-2 mt-6 pt-5 border-t border-slate-100">
+    <!-- Sağlık Kontrolü -->
+    <div class="border border-slate-100 rounded-xl p-4">
+      <div class="flex items-center justify-between gap-2">
+        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Sağlık Kontrolü</p>
+        <a href="/health-checks?environment_id={{ environment.id }}" class="text-xs font-medium text-slate-400 hover:text-slate-700 transition">Geçmiş</a>
+      </div>
+      {% if environment.last_checked_at %}
+      <div class="flex items-center gap-1.5 mt-2 text-xs flex-wrap">
+        {% if environment.last_check_ok %}
+        <span class="inline-flex items-center gap-1 font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full whitespace-nowrap">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          {{ environment.last_status_code }} OK · {{ environment.last_response_ms }}ms
+        </span>
+        {% else %}
+        <span class="inline-flex items-center gap-1 font-medium text-red-700 bg-red-50 px-2 py-0.5 rounded-full whitespace-nowrap">
+          <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+          {% if environment.last_status_code %}{{ environment.last_status_code }}{% else %}Erişilemiyor{% endif %}
+        </span>
+        {% endif %}
+        <span class="text-slate-400 whitespace-nowrap">{{ environment.last_checked_at.strftime('%d.%m.%Y %H:%M') }}</span>
+      </div>
+      {% if not environment.last_check_ok and environment.last_check_error %}
+      <p class="text-xs text-slate-400 mt-1 truncate" title="{{ environment.last_check_error }}">{{ environment.last_check_error }}</p>
+      {% endif %}
+      {% else %}
+      <p class="text-xs text-slate-400 mt-2">Henüz kontrol edilmedi</p>
+      {% endif %}
+      <form method="post" action="/projects/{{ project.id }}/environments/{{ environment.id }}/check" class="mt-3">
+        <button type="submit" class="text-xs font-medium text-brand-600 hover:text-brand-700 transition">Sağlık Kontrolü Yap</button>
+      </form>
+    </div>
+
+    <!-- SSL Kontrolü -->
+    <div class="border border-slate-100 rounded-xl p-4">
+      <div class="flex items-center justify-between gap-2">
+        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">SSL Kontrolü</p>
+      </div>
+      {% if environment.ssl_checked_at %}
+      <div class="flex items-center gap-1.5 mt-2 text-xs flex-wrap">
+        {% if environment.ssl_ok %}
+          {% if environment.ssl_days_remaining <= 7 %}
+          <span class="inline-flex items-center gap-1 font-medium text-red-700 bg-red-50 px-2 py-0.5 rounded-full whitespace-nowrap">SSL {{ environment.ssl_days_remaining }} gün kaldı</span>
+          {% elif environment.ssl_days_remaining <= 30 %}
+          <span class="inline-flex items-center gap-1 font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full whitespace-nowrap">SSL {{ environment.ssl_days_remaining }} gün kaldı</span>
+          {% else %}
+          <span class="inline-flex items-center gap-1 font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full whitespace-nowrap">SSL {{ environment.ssl_days_remaining }} gün kaldı</span>
+          {% endif %}
+          <span class="text-slate-400 whitespace-nowrap">{{ environment.ssl_expires_at.strftime('%d.%m.%Y') }}{% if environment.ssl_issuer %} · {{ environment.ssl_issuer }}{% endif %}</span>
+        {% else %}
+          <span class="inline-flex items-center gap-1 font-medium text-red-700 bg-red-50 px-2 py-0.5 rounded-full whitespace-nowrap">SSL sorunlu</span>
+        {% endif %}
+      </div>
+      {% if not environment.ssl_ok and environment.ssl_error %}
+      <p class="text-xs text-slate-400 mt-1 truncate" title="{{ environment.ssl_error }}">{{ environment.ssl_error }}</p>
+      {% endif %}
+      {% else %}
+      <p class="text-xs text-slate-400 mt-2">SSL henüz kontrol edilmedi</p>
+      {% endif %}
+      <form method="post" action="/projects/{{ project.id }}/environments/{{ environment.id }}/ssl-check" class="mt-3">
+        <button type="submit" class="text-xs font-medium text-brand-600 hover:text-brand-700 transition">SSL Kontrol Et</button>
+      </form>
+    </div>
+
+    <!-- SEO Kontrolü -->
+    <div class="border border-slate-100 rounded-xl p-4">
+      <div class="flex items-center justify-between gap-2">
+        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">SEO Kontrolü</p>
+        <a href="/seo-checks?environment_id={{ environment.id }}" class="text-xs font-medium text-slate-400 hover:text-slate-700 transition">Geçmiş</a>
+      </div>
+      {% if environment.last_seo_checked_at %}
+      <div class="flex items-center gap-1.5 mt-2 text-xs flex-wrap">
+        {% if environment.last_seo_ok %}
+        <span class="inline-flex items-center gap-1 font-medium px-2 py-0.5 rounded-full whitespace-nowrap
+                     {% if environment.last_seo_score >= 80 %}text-emerald-700 bg-emerald-50
+                     {% elif environment.last_seo_score >= 50 %}text-amber-700 bg-amber-50
+                     {% else %}text-red-700 bg-red-50{% endif %}">
+          SEO {{ environment.last_seo_score }}/100
+        </span>
+        <span class="text-slate-400 whitespace-nowrap">{{ environment.last_seo_issue_count }} sorun · {{ environment.last_seo_checked_at.strftime('%d.%m.%Y %H:%M') }}</span>
+        {% else %}
+        <span class="inline-flex items-center gap-1 font-medium text-red-700 bg-red-50 px-2 py-0.5 rounded-full whitespace-nowrap">SEO taraması başarısız</span>
+        {% endif %}
+      </div>
+      {% if not environment.last_seo_ok and environment.last_seo_error %}
+      <p class="text-xs text-slate-400 mt-1 truncate" title="{{ environment.last_seo_error }}">{{ environment.last_seo_error }}</p>
+      {% endif %}
+      {% else %}
+      <p class="text-xs text-slate-400 mt-2">Henüz kontrol edilmedi</p>
+      {% endif %}
+      <form method="post" action="/projects/{{ project.id }}/environments/{{ environment.id }}/seo-check" class="mt-3">
+        <button type="submit" class="text-xs font-medium text-brand-600 hover:text-brand-700 transition">SEO Kontrolü Yap</button>
+      </form>
+    </div>
+
+    <!-- Lighthouse -->
+    <div class="border border-slate-100 rounded-xl p-4">
+      <div class="flex items-center justify-between gap-2">
+        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Lighthouse</p>
+        <a href="/lighthouse-checks?environment_id={{ environment.id }}" class="text-xs font-medium text-slate-400 hover:text-slate-700 transition">Geçmiş</a>
+      </div>
+      {% if environment.last_lighthouse_checked_at %}
+      {% if environment.last_lighthouse_ok %}
+      <div class="flex items-center gap-1.5 mt-2 text-xs font-semibold flex-wrap">
+        <span class="{{ lh_color(environment.last_lighthouse_performance) }}">P {{ environment.last_lighthouse_performance if environment.last_lighthouse_performance is not none else '—' }}</span>
+        <span class="text-slate-300">·</span>
+        <span class="{{ lh_color(environment.last_lighthouse_accessibility) }}">A {{ environment.last_lighthouse_accessibility if environment.last_lighthouse_accessibility is not none else '—' }}</span>
+        <span class="text-slate-300">·</span>
+        <span class="{{ lh_color(environment.last_lighthouse_best_practices) }}">BP {{ environment.last_lighthouse_best_practices if environment.last_lighthouse_best_practices is not none else '—' }}</span>
+        <span class="text-slate-300">·</span>
+        <span class="{{ lh_color(environment.last_lighthouse_seo) }}">SEO {{ environment.last_lighthouse_seo if environment.last_lighthouse_seo is not none else '—' }}</span>
+        <span class="text-slate-400 font-normal">{{ environment.last_lighthouse_checked_at.strftime('%d.%m.%Y %H:%M') }}</span>
+      </div>
+      {% else %}
+      <div class="mt-2 text-xs">
+        <span class="inline-flex items-center gap-1 font-medium text-red-700 bg-red-50 px-2 py-0.5 rounded-full whitespace-nowrap">Lighthouse başarısız</span>
+        {% if environment.last_lighthouse_error %}<p class="text-slate-400 mt-1 truncate" title="{{ environment.last_lighthouse_error }}">{{ environment.last_lighthouse_error }}</p>{% endif %}
+      </div>
+      {% endif %}
+      {% else %}
+      <p class="text-xs text-slate-400 mt-2">Henüz kontrol edilmedi</p>
+      {% endif %}
+      <form method="post" action="/projects/{{ project.id }}/environments/{{ environment.id }}/lighthouse-check" class="mt-3">
+        <button type="submit" class="text-xs font-medium text-brand-600 hover:text-brand-700 transition">Lighthouse Raporu Al</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="mt-8">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide">Cron Job'lar</h2>
+    <button type="button" onclick="document.getElementById('cron-job-modal').showModal()"
+            class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700 transition">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+        <path d="M10 4a1 1 0 0 1 1 1v4h4a1 1 0 1 1 0 2h-4v4a1 1 0 1 1-2 0v-4H5a1 1 0 1 1 0-2h4V5a1 1 0 0 1 1-1Z" />
+      </svg>
+      Cron Job Tanımla
+    </button>
+  </div>
+
+  {% if cron_jobs_with_next_run %}
+  <div class="space-y-3">
+    {% for cron_job, next_run in cron_jobs_with_next_run %}
+    <div class="bg-white border border-slate-200 rounded-xl p-4">
+      <div class="flex items-center justify-between gap-3 flex-wrap">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            {% if cron_job.check_type == 'scenario' and cron_job.scenario %}
+            <a href="/projects/{{ project.id }}/environments/{{ environment.id }}/scenarios/{{ cron_job.scenario.id }}"
+               class="font-medium text-slate-900 hover:text-brand-600 transition">Senaryo: {{ cron_job.scenario.name }}</a>
+            {% else %}
+            <span class="font-medium text-slate-900">{{ check_type_labels[cron_job.check_type] }}</span>
+            {% endif %}
+            <span class="text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap
+                         {% if cron_job.is_active %}bg-emerald-50 text-emerald-700{% else %}bg-slate-100 text-slate-500{% endif %}">
+              {{ 'Aktif' if cron_job.is_active else 'Duraklatıldı' }}
+            </span>
+            <span class="text-xs text-slate-500">{{ frequency_labels[cron_job.frequency] }}</span>
+            {% if cron_job.notify_enabled and cron_job.notify_emails %}
+            <span class="inline-flex items-center gap-1 text-xs font-medium text-brand-700 bg-brand-50 px-2 py-0.5 rounded-full whitespace-nowrap">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M3 4a2 2 0 0 0-2 2v.383l9 4.85 9-4.85V6a2 2 0 0 0-2-2H3Z" />
+                <path d="M19 8.85 10 13.7l-9-4.85V14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.85Z" />
+              </svg>
+              Bildirim açık
+            </span>
+            {% endif %}
+          </div>
+          <p class="text-xs text-slate-400 mt-1">
+            {% if cron_job.last_run_at %}
+            Son çalışma: {{ cron_job.last_run_at.strftime('%d.%m.%Y %H:%M') }}{% if cron_job.last_run_ok is not none %} ({{ 'başarılı' if cron_job.last_run_ok else 'hata' }}){% endif %}
+            {% else %}
+            Henüz çalışmadı
+            {% endif %}
+            {% if cron_job.is_active and next_run %} · Sıradaki: {{ next_run.strftime('%d.%m.%Y %H:%M') }}{% endif %}
+          </p>
+          {% if cron_job.last_run_error %}
+          <p class="text-xs text-red-500 mt-0.5 truncate" title="{{ cron_job.last_run_error }}">{{ cron_job.last_run_error }}</p>
+          {% endif %}
+        </div>
+        <div class="flex items-center gap-1 shrink-0">
+          <form method="post" action="/projects/{{ project.id }}/environments/{{ environment.id }}/cron-jobs/{{ cron_job.id }}/toggle">
+            <button type="submit" class="text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-100 px-2.5 py-1.5 rounded-lg transition">
+              {{ 'Duraklat' if cron_job.is_active else 'Etkinleştir' }}
+            </button>
+          </form>
+          <form method="post" action="/projects/{{ project.id }}/environments/{{ environment.id }}/cron-jobs/{{ cron_job.id }}/delete">
+            <button type="submit" class="text-xs font-medium text-red-500 hover:text-red-700 hover:bg-red-50 px-2.5 py-1.5 rounded-lg transition">Sil</button>
+          </form>
+        </div>
+      </div>
+
+      <form method="post" action="/projects/{{ project.id }}/environments/{{ environment.id }}/cron-jobs/{{ cron_job.id }}/notify"
+            class="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 flex-wrap">
+        <label class="inline-flex items-center gap-1.5 text-xs text-slate-600 whitespace-nowrap">
+          <input type="checkbox" name="notify_enabled" {% if cron_job.notify_enabled %}checked{% endif %}
+                 class="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+          E-posta bildirimi
+        </label>
+        <input type="text" name="notify_emails" value="{{ cron_job.notify_emails or '' }}"
+               placeholder="ornek@sirket.com, digeri@sirket.com"
+               class="flex-1 min-w-[200px] rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
+        <button type="submit" class="text-xs font-medium text-brand-600 hover:text-brand-700 transition px-2 py-1.5 shrink-0">Kaydet</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="bg-white border border-dashed border-slate-300 rounded-xl p-8 text-center">
+    <p class="text-slate-500 text-sm">Bu ortam için henüz cron job tanımlanmadı.</p>
+  </div>
+  {% endif %}
+</div>
+
+<div class="mt-8">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide">Senaryolar</h2>
+    <button type="button" onclick="document.getElementById('scenario-modal').showModal()"
+            class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700 transition">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+        <path d="M10 4a1 1 0 0 1 1 1v4h4a1 1 0 1 1 0 2h-4v4a1 1 0 1 1-2 0v-4H5a1 1 0 1 1 0-2h4V5a1 1 0 0 1 1-1Z" />
+      </svg>
+      Senaryo Ekle
+    </button>
+  </div>
+
+  {% if environment.scenarios %}
+  <div class="space-y-3">
+    {% for scenario in environment.scenarios %}
+    <a href="/projects/{{ project.id }}/environments/{{ environment.id }}/scenarios/{{ scenario.id }}"
+       class="block bg-white border border-slate-200 rounded-xl p-4 hover:border-slate-300 hover:shadow-sm transition">
+      <div class="flex items-center justify-between gap-3 flex-wrap">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-medium text-slate-900">{{ scenario.name }}</span>
+            <span class="text-xs text-slate-400">{{ scenario.steps|length }} adım</span>
+          </div>
+          <p class="text-xs text-slate-400 mt-1">
+            {% if scenario.last_run %}
+            Son çalışma: {{ scenario.last_run.run_at.strftime('%d.%m.%Y %H:%M') }}
+            {% else %}
+            Henüz çalıştırılmadı
+            {% endif %}
+          </p>
+        </div>
+        {% if scenario.last_run %}
+        {% if scenario.last_run.ok %}
+        <span class="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full whitespace-nowrap">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          Başarılı
+        </span>
+        {% else %}
+        <span class="inline-flex items-center gap-1 text-xs font-medium text-red-700 bg-red-50 px-2.5 py-1 rounded-full whitespace-nowrap">
+          <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+          Başarısız
+        </span>
+        {% endif %}
+        {% endif %}
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="bg-white border border-dashed border-slate-300 rounded-xl p-8 text-center">
+    <p class="text-slate-500 text-sm">Bu ortam için henüz senaryo tanımlanmadı.</p>
+  </div>
+  {% endif %}
+</div>
+
+<dialog id="scenario-modal" class="rounded-2xl border-0 p-0 shadow-xl w-full max-w-sm">
+  <div class="p-6">
+    <h2 class="text-lg font-semibold text-slate-900 mb-1">Senaryo Ekle</h2>
+    <p class="text-sm text-slate-500 mb-4">Bir isim ver, adımları sonraki sayfada ekleyeceksin.</p>
+    <form method="post" action="/projects/{{ project.id }}/environments/{{ environment.id }}/scenarios" class="space-y-4">
+      <div>
+        <label for="scenario-name" class="block text-sm font-medium text-slate-700 mb-1.5">Senaryo Adı</label>
+        <input type="text" id="scenario-name" name="name" required placeholder="Örn. Mobil filtre testi"
+               class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button type="button" onclick="document.getElementById('scenario-modal').close()"
+                class="text-sm font-medium text-slate-600 hover:bg-slate-100 px-4 py-2 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300">
+          Vazgeç
+        </button>
+        <button type="submit"
+                class="bg-brand-600 text-white text-sm font-medium px-4 py-2 rounded-lg shadow-sm hover:bg-brand-700 transition">
+          Oluştur
+        </button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<dialog id="cron-job-modal" class="rounded-2xl border-0 p-0 shadow-xl w-full max-w-sm">
+  <div class="p-6">
+    <h2 class="text-lg font-semibold text-slate-900 mb-1">Cron Job Tanımla</h2>
+    <p class="text-sm text-slate-500 mb-4">Bu ortam için otomatik çalışacak bir kontrol zamanla. Aynı kontrol türü için tekrar tanımlarsan sıklığı günceller.</p>
+    <form method="post" action="/projects/{{ project.id }}/environments/{{ environment.id }}/cron-jobs" class="space-y-4">
+      <div>
+        <label for="check_type" class="block text-sm font-medium text-slate-700 mb-1.5">Kontrol Türü</label>
+        <select id="check_type" name="check_type" required
+                class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition">
+          {% for key, label in check_type_labels.items() %}
+          {% if key != 'scenario' %}
+          <option value="{{ key }}">{{ label }}</option>
+          {% endif %}
+          {% endfor %}
+          {% if environment.scenarios %}
+          <optgroup label="Senaryolar">
+            {% for scenario in environment.scenarios %}
+            <option value="scenario:{{ scenario.id }}">{{ scenario.name }}</option>
+            {% endfor %}
+          </optgroup>
+          {% endif %}
+        </select>
+      </div>
+      <div>
+        <label for="frequency" class="block text-sm font-medium text-slate-700 mb-1.5">Sıklık</label>
+        <select id="frequency" name="frequency" required
+                class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition">
+          {% for key, label in frequency_labels.items() %}
+          <option value="{{ key }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="pt-2 border-t border-slate-100">
+        <label class="inline-flex items-center gap-1.5 text-sm text-slate-700 mt-3">
+          <input type="checkbox" name="notify_enabled"
+                 class="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+          E-posta bildirimi gönder
+        </label>
+        <input type="text" name="notify_emails" placeholder="ornek@sirket.com, digeri@sirket.com"
+               class="w-full mt-2 rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button type="button" onclick="document.getElementById('cron-job-modal').close()"
+                class="text-sm font-medium text-slate-600 hover:bg-slate-100 px-4 py-2 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300">
+          Vazgeç
+        </button>
+        <button type="submit"
+                class="bg-brand-600 text-white text-sm font-medium px-4 py-2 rounded-lg shadow-sm hover:bg-brand-700 transition">
+          Kaydet
+        </button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<dialog id="delete-env-modal" class="rounded-2xl border-0 p-0 shadow-xl w-full max-w-sm">
+  <div class="p-6">
+    <div class="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center mb-4">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M8.75 1a.75.75 0 0 0-.75.75V3H4a.75.75 0 0 0 0 1.5h.28l.7 10.48A2.25 2.25 0 0 0 7.22 17h5.56a2.25 2.25 0 0 0 2.24-2.02l.7-10.48H16A.75.75 0 0 0 16 3h-4v-.25a.75.75 0 0 0-.75-.75h-2.5ZM8.5 7.25a.75.75 0 0 1 1.5 0v6.5a.75.75 0 0 1-1.5 0v-6.5Zm3.5 0a.75.75 0 0 1 1.5 0v6.5a.75.75 0 0 1-1.5 0v-6.5Z" clip-rule="evenodd" />
+      </svg>
+    </div>
+    <h2 class="text-lg font-semibold text-slate-900">Ortamı sil</h2>
+    <p class="text-sm text-slate-600 mt-1.5">
+      <span id="delete-env-modal-name" class="font-medium text-slate-900"></span> ortamını silmek istediğine emin misin?
+      Bu işlem geri alınamaz.
+    </p>
+    <form id="delete-env-modal-form" method="post" class="flex items-center justify-end gap-2 mt-6">
+      <button type="button" onclick="document.getElementById('delete-env-modal').close()"
+              class="text-sm font-medium text-slate-600 hover:bg-slate-100 px-4 py-2 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300">
+        Vazgeç
+      </button>
+      <button type="submit"
+              class="bg-red-600 text-white text-sm font-medium px-4 py-2 rounded-lg shadow-sm hover:bg-red-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300">
+        Evet, sil
+      </button>
+    </form>
+  </div>
+</dialog>
+
+<script src="{{ static_asset_url('js/app.js') }}"></script>
+{% endblock %}

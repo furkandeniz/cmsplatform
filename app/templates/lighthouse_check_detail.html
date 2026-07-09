@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% macro lh_color(score) -%}
+{%- if score is none -%}text-slate-400
+{%- elif score >= 90 -%}text-emerald-600
+{%- elif score >= 50 -%}text-amber-600
+{%- else -%}text-red-600
+{%- endif -%}
+{%- endmacro %}
+
+{% macro lh_ring(score) -%}
+{%- if score is none -%}border-slate-200 text-slate-400
+{%- elif score >= 90 -%}border-emerald-200 text-emerald-600
+{%- elif score >= 50 -%}border-amber-200 text-amber-600
+{%- else -%}border-red-200 text-red-600
+{%- endif -%}
+{%- endmacro %}
+
+{% block title %}Lighthouse Detayı · {{ check.environment.name }} · CMSPlus{% endblock %}
+
+{% block content %}
+<a href="/lighthouse-checks?environment_id={{ check.environment.id }}" class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 mb-4 transition">
+  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+    <path fill-rule="evenodd" d="M12.79 4.21a.75.75 0 0 1 0 1.06L8.06 10l4.73 4.73a.75.75 0 1 1-1.06 1.06l-5.26-5.26a.75.75 0 0 1 0-1.06l5.26-5.26a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" />
+  </svg>
+  {{ check.environment.name }} Lighthouse geçmişine dön
+</a>
+
+<div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+  <div class="flex items-start justify-between gap-4 flex-wrap">
+    <div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <h1 class="text-xl font-bold text-slate-900">{{ check.environment.project.name }} · {{ check.environment.name }}</h1>
+        {% if not check.ok %}
+        <span class="inline-flex items-center gap-1 text-xs font-medium text-red-700 bg-red-50 px-2 py-0.5 rounded-full">Başarısız</span>
+        {% endif %}
+      </div>
+      <a href="{{ check.environment.url }}" target="_blank" rel="noopener noreferrer"
+         class="text-sm text-slate-500 hover:text-brand-600 transition break-all">
+        {{ check.environment.url }}
+      </a>
+      <p class="text-xs text-slate-400 mt-1">
+        {{ check.checked_at.strftime('%d.%m.%Y %H:%M:%S') }}
+        {% if check.duration_ms is not none %} · {{ (check.duration_ms / 1000)|round(1) }}s{% endif %}
+      </p>
+    </div>
+    <a href="/lighthouse-checks/{{ check.id }}/json" target="_blank" rel="noopener noreferrer"
+       class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 px-3 py-2 rounded-lg transition">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M4.5 2A1.5 1.5 0 0 0 3 3.5v13A1.5 1.5 0 0 0 4.5 18h11a1.5 1.5 0 0 0 1.5-1.5V7.621a1.5 1.5 0 0 0-.44-1.06l-4.622-4.622A1.5 1.5 0 0 0 10.878 1.5H4.5ZM6 12a1 1 0 1 0 0 2h1a1 1 0 1 0 0-2H6Zm0-3a1 1 0 1 0 0 2h5a1 1 0 1 0 0-2H6Z" clip-rule="evenodd" />
+      </svg>
+      Ham JSON
+    </a>
+  </div>
+
+  {% if not check.ok %}
+  <div class="mt-5 pt-5 border-t border-slate-100">
+    <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">Hata</p>
+    <p class="text-sm text-red-700 bg-red-50 rounded-lg px-3 py-2">{{ check.error }}</p>
+  </div>
+  {% else %}
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-5 border-t border-slate-100">
+    <div class="text-center">
+      <div class="w-16 h-16 mx-auto rounded-full border-4 {{ lh_ring(check.performance_score) }} flex items-center justify-center text-lg font-bold">
+        {{ check.performance_score if check.performance_score is not none else '—' }}
+      </div>
+      <p class="text-xs font-medium text-slate-500 mt-2">Performance</p>
+    </div>
+    <div class="text-center">
+      <div class="w-16 h-16 mx-auto rounded-full border-4 {{ lh_ring(check.accessibility_score) }} flex items-center justify-center text-lg font-bold">
+        {{ check.accessibility_score if check.accessibility_score is not none else '—' }}
+      </div>
+      <p class="text-xs font-medium text-slate-500 mt-2">Accessibility</p>
+    </div>
+    <div class="text-center">
+      <div class="w-16 h-16 mx-auto rounded-full border-4 {{ lh_ring(check.best_practices_score) }} flex items-center justify-center text-lg font-bold">
+        {{ check.best_practices_score if check.best_practices_score is not none else '—' }}
+      </div>
+      <p class="text-xs font-medium text-slate-500 mt-2">Best Practices</p>
+    </div>
+    <div class="text-center">
+      <div class="w-16 h-16 mx-auto rounded-full border-4 {{ lh_ring(check.seo_score) }} flex items-center justify-center text-lg font-bold">
+        {{ check.seo_score if check.seo_score is not none else '—' }}
+      </div>
+      <p class="text-xs font-medium text-slate-500 mt-2">SEO</p>
+    </div>
+  </div>
+
+  <div class="mt-6 pt-5 border-t border-slate-100">
+    <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">İyileştirilebilecek Bulgular ({{ audits|length }})</p>
+    {% if audits %}
+    <ul class="space-y-3">
+      {% for audit in audits %}
+      <li class="flex items-start gap-3 text-sm">
+        <span class="text-xs font-semibold {{ lh_color(audit.score * 100) }} shrink-0 w-8 text-right">{{ (audit.score * 100)|round|int }}</span>
+        <div class="min-w-0">
+          <p class="text-slate-800 font-medium">{{ audit.title }}{% if audit.display_value %} <span class="text-slate-400 font-normal">— {{ audit.display_value }}</span>{% endif %}</p>
+          <p class="text-xs text-slate-400 mt-0.5">{{ audit.category }}</p>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-sm text-emerald-700">Önemli bir bulgu yok.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<div class="mt-6">
+  <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">JSON</h2>
+  <div class="bg-slate-900 rounded-2xl p-5 overflow-x-auto">
+    <pre class="text-xs text-slate-100 leading-relaxed"><code>{{ check_json | tojson_pretty }}</code></pre>
+  </div>
+</div>
+{% endblock %}

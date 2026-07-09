@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}{{ "Ortamı Düzenle" if environment else "Yeni Ortam Ekle" }} · {{ project.name }} · CMSPlus{% endblock %}
+
+{% block content %}
+<div class="max-w-lg">
+  <a href="/projects/{{ project.id }}" class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 mb-4 transition">
+    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+      <path fill-rule="evenodd" d="M12.79 4.21a.75.75 0 0 1 0 1.06L8.06 10l4.73 4.73a.75.75 0 1 1-1.06 1.06l-5.26-5.26a.75.75 0 0 1 0-1.06l5.26-5.26a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" />
+    </svg>
+    {{ project.name }}'a dön
+  </a>
+  <h1 class="text-2xl font-bold text-slate-900 mb-1">{{ "Ortamı Düzenle" if environment else "Yeni Ortam Ekle" }}</h1>
+  <p class="text-slate-500 text-sm mb-6">{{ project.name }} projesi için ortam bilgilerini gir.</p>
+
+  <form method="post"
+        action="{{ '/projects/%d/environments/%d/edit' % (project.id, environment.id) if environment else '/projects/%d/environments' % project.id }}"
+        class="bg-white border border-slate-200 rounded-2xl p-6 space-y-5 shadow-sm">
+    <div>
+      <label for="name" class="block text-sm font-medium text-slate-700 mb-1.5">Ortam Adı</label>
+      <input type="text" id="name" name="name" required placeholder="Production" list="env-name-suggestions"
+             value="{{ environment.name if environment else '' }}"
+             class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
+      <datalist id="env-name-suggestions">
+        <option value="Production"></option>
+        <option value="Staging"></option>
+        <option value="Development"></option>
+        <option value="Test"></option>
+      </datalist>
+    </div>
+
+    <div>
+      <label for="url" class="block text-sm font-medium text-slate-700 mb-1.5">Ortam URL</label>
+      <input type="url" id="url" name="url" required placeholder="https://example.com"
+             value="{{ environment.url if environment else '' }}"
+             class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
+    </div>
+
+    <div>
+      <label for="drupal_version" class="block text-sm font-medium text-slate-700 mb-1.5">Drupal Sürümü (opsiyonel)</label>
+      <input type="text" id="drupal_version" name="drupal_version" placeholder="10.2"
+             value="{{ environment.drupal_version or '' if environment else '' }}"
+             class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
+    </div>
+
+    <div class="flex items-center gap-3 pt-2">
+      <button type="submit"
+              class="bg-brand-600 text-white text-sm font-medium px-4 py-2.5 rounded-lg shadow-sm hover:bg-brand-700 hover:shadow transition">
+        Kaydet
+      </button>
+      <a href="/projects/{{ project.id }}" class="text-sm font-medium text-slate-500 hover:text-slate-800 transition">Vazgeç</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

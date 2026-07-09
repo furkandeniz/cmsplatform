@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker --version)",
+      "Bash(docker compose *)",
+      "Read(//usr/local/bin/**)",
+      "Bash(brew list *)",
+      "Bash(mkdir -p /Users/furkandeniz/Desktop/Code/cmsplus/app/templates /Users/furkandeniz/Desktop/Code/cmsplus/app/static/css /Users/furkandeniz/Desktop/Code/cmsplus/app/static/js *)",
+      "Bash(python3 -m venv .venv)",
+      "Bash(.venv/bin/pip install *)",
+      "Bash(open -a Docker)",
+      "Bash(docker info *)",
+      "Bash(break)"
+    ],
+    "additionalDirectories": [
+      "/Users/furkandeniz/Desktop/Code/cmsplus/app"
+    ]
+  }
+}

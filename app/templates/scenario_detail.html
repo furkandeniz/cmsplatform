@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+
+{% block title %}{{ scenario.name }} · {{ environment.name }} · CMSPlus{% endblock %}
+
+{% block content %}
+<a href="/projects/{{ project.id }}/environments/{{ environment.id }}" class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 mb-4 transition">
+  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+    <path fill-rule="evenodd" d="M12.79 4.21a.75.75 0 0 1 0 1.06L8.06 10l4.73 4.73a.75.75 0 1 1-1.06 1.06l-5.26-5.26a.75.75 0 0 1 0-1.06l5.26-5.26a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" />
+  </svg>
+  {{ environment.name }}'a dön
+</a>
+
+<div class="flex items-center justify-between gap-4 flex-wrap mb-6">
+  <div>
+    <h1 class="text-2xl font-bold text-slate-900">{{ scenario.name }}</h1>
+    <p class="text-slate-500 text-sm mt-1">{{ project.name }} · {{ environment.name }} · {{ scenario.steps|length }} adım</p>
+  </div>
+  <div class="flex items-center gap-2">
+    <form method="post" action="/projects/{{ project.id }}/environments/{{ environment.id }}/scenarios/{{ scenario.id }}/run">
+      <button type="submit" {% if not scenario.steps %}disabled{% endif %}
+              class="inline-flex items-center gap-1.5 bg-brand-600 text-white text-sm font-medium px-4 py-2.5 rounded-lg shadow-sm hover:bg-brand-700 hover:shadow transition disabled:opacity-40 disabled:cursor-not-allowed">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M6.3 2.84A1.5 1.5 0 0 0 4 4.11v11.78a1.5 1.5 0 0 0 2.3 1.27l9.34-5.89a1.5 1.5 0 0 0 0-2.54L6.3 2.84Z" clip-rule="evenodd" />
+        </svg>
+        Çalıştır
+      </button>
+    </form>
+    <button type="button"
+            class="inline-flex items-center gap-1.5 text-sm font-medium text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-2.5 rounded-lg transition"
+            onclick="document.getElementById('delete-scenario-modal').showModal()">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M8.75 1a.75.75 0 0 0-.75.75V3H4a.75.75 0 0 0 0 1.5h.28l.7 10.48A2.25 2.25 0 0 0 7.22 17h5.56a2.25 2.25 0 0 0 2.24-2.02l.7-10.48H16A.75.75 0 0 0 16 3h-4v-.25a.75.75 0 0 0-.75-.75h-2.5ZM8.5 7.25a.75.75 0 0 1 1.5 0v6.5a.75.75 0 0 1-1.5 0v-6.5Zm3.5 0a.75.75 0 0 1 1.5 0v6.5a.75.75 0 0 1-1.5 0v-6.5Z" clip-rule="evenodd" />
+      </svg>
+      Sil
+    </button>
+  </div>
+</div>
+
+<div class="mb-8">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide">Adımlar</h2>
+    <button type="button" onclick="openAddStepModal()"
+            class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700 transition">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+        <path d="M10 4a1 1 0 0 1 1 1v4h4a1 1 0 1 1 0 2h-4v4a1 1 0 1 1-2 0v-4H5a1 1 0 1 1 0-2h4V5a1 1 0 0 1 1-1Z" />
+      </svg>
+      Adım Ekle
+    </button>
+  </div>
+
+  {% if steps_with_description %}
+  <div class="space-y-2">
+    {% for step, description in steps_with_description %}
+    <div class="bg-white border border-slate-200 rounded-xl p-3.5 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <span class="shrink-0 w-6 h-6 rounded-full bg-slate-100 text-slate-500 text-xs font-semibold flex items-center justify-center">{{ loop.index }}</span>
+        <div class="min-w-0">
+          <span class="text-xs font-medium text-slate-400 uppercase tracking-wide">{{ step_type_labels[step.step_type] }}</span>
+          <p class="text-sm text-slate-800 font-mono truncate">{{ description }}</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-1 shrink-0">
+        <form method="post" action="/projects/{{ project.id }}/environments/{{ environment.id }}/scenarios/{{ scenario.id }}/steps/{{ step.id }}/move">
+          <input type="hidden" name="direction" value="up" />
+          <button type="submit" {% if loop.first %}disabled{% endif %}
+                  class="text-slate-500 hover:text-slate-900 hover:bg-slate-100 p-1.5 rounded-lg transition disabled:opacity-25 disabled:pointer-events-none"
+                  title="Yukarı taşı">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 3a.75.75 0 0 1 .53.22l6 6a.75.75 0 0 1-1.06 1.06L10.75 5.56V16.25a.75.75 0 0 1-1.5 0V5.56L4.53 10.28a.75.75 0 0 1-1.06-1.06l6-6A.75.75 0 0 1 10 3Z" clip-rule="evenodd" />
+            </svg>
+          </button>
+        </form>
+        <form method="post" action="/projects/{{ project.id }}/environments/{{ environment.id }}/scenarios/{{ scenario.id }}/steps/{{ step.id }}/move">
+          <input type="hidden" name="direction" value="down" />
+          <button type="submit" {% if loop.last %}disabled{% endif %}
+                  class="text-slate-500 hover:text-slate-900 hover:bg-slate-100 p-1.5 rounded-lg transition disabled:opacity-25 disabled:pointer-events-none"
+                  title="Aşağı taşı">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 17a.75.75 0 0 1-.53-.22l-6-6a.75.75 0 1 1 1.06-1.06l4.72 4.72V3.75a.75.75 0 0 1 1.5 0v10.69l4.72-4.72a.75.75 0 1 1 1.06 1.06l-6 6A.75.75 0 0 1 10 17Z" clip-rule="evenodd" />
+            </svg>
+          </button>
+        </form>
+        <button type="button"
+                onclick="openEditStepModal(this)"
+                data-edit-url="/projects/{{ project.id }}/environments/{{ environment.id }}/scenarios/{{ scenario.id }}/steps/{{ step.id }}/edit"
+                data-step-type="{{ step.step_type }}"
+                data-path="{{ step.path or '' }}"
+                data-selector="{{ step.selector or '' }}"
+                data-value="{{ step.value or '' }}"
+                data-operator="{{ step.operator or '' }}"
+                data-count="{{ step.count if step.count is not none else '' }}"
+                data-wait-ms="{{ step.wait_ms if step.wait_ms is not none else '' }}"
+                class="text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-100 px-2.5 py-1.5 rounded-lg transition">
+          Düzenle
+        </button>
+        <form method="post" action="/projects/{{ project.id }}/environments/{{ environment.id }}/scenarios/{{ scenario.id }}/steps/{{ step.id }}/delete">
+          <button type="submit" class="text-xs font-medium text-red-500 hover:text-red-700 hover:bg-red-50 px-2.5 py-1.5 rounded-lg transition">Sil</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="bg-white border border-dashed border-slate-300 rounded-xl p-8 text-center">
+    <p class="text-slate-500 text-sm">Henüz adım eklenmedi.</p>
+  </div>
+  {% endif %}
+</div>
+
+<div>
+  <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Çalıştırma Geçmişi</h2>
+  {% if scenario.runs %}
+  <div class="space-y-2">
+    {% for run in scenario.runs %}
+    <a href="/projects/{{ project.id }}/environments/{{ environment.id }}/scenarios/{{ scenario.id }}/runs/{{ run.id }}"
+       class="block bg-white border border-slate-200 rounded-xl p-3.5 hover:border-slate-300 hover:shadow-sm transition">
+      <div class="flex items-center justify-between gap-3 flex-wrap">
+        <div class="flex items-center gap-2">
+          {% if run.ok %}
+          <span class="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full whitespace-nowrap">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            Başarılı
+          </span>
+          {% else %}
+          <span class="inline-flex items-center gap-1 text-xs font-medium text-red-700 bg-red-50 px-2.5 py-1 rounded-full whitespace-nowrap">
+            <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+            Başarısız
+          </span>
+          {% endif %}
+          <span class="text-sm text-slate-500">{{ run.run_at.strftime('%d.%m.%Y %H:%M') }}</span>
+        </div>
+        <span class="text-xs text-slate-400">{% if run.duration_ms is not none %}{{ (run.duration_ms / 1000)|round(1) }}s{% endif %}</span>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="bg-white border border-dashed border-slate-300 rounded-xl p-8 text-center">
+    <p class="text-slate-500 text-sm">Bu senaryo henüz çalıştırılmadı.</p>
+  </div>
+  {% endif %}
+</div>
+
+<dialog id="add-step-modal" class="rounded-2xl border-0 p-0 shadow-xl w-full max-w-md">
+  <div class="p-6">
+    <h2 id="step-modal-title" class="text-lg font-semibold text-slate-900 mb-4">Adım Ekle</h2>
+    <form id="step-form" method="post"
+          action="/projects/{{ project.id }}/environments/{{ environment.id }}/scenarios/{{ scenario.id }}/steps"
+          data-create-url="/projects/{{ project.id }}/environments/{{ environment.id }}/scenarios/{{ scenario.id }}/steps"
+          class="space-y-4">
+      <div>
+        <label for="step_type" class="block text-sm font-medium text-slate-700 mb-1.5">Adım Türü</label>
+        <select id="step_type" name="step_type" required onchange="updateScenarioStepFields()"
+                class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition">
+          {% for key, label in step_type_labels.items() %}
+          <option value="{{ key }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div data-step-field="path" class="hidden">
+        <label for="path" class="block text-sm font-medium text-slate-700 mb-1.5">Sayfa yolu</label>
+        <input type="text" id="path" name="path" placeholder="/mobile"
+               class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
+      </div>
+
+      <div data-step-field="selector" class="hidden">
+        <label for="selector" class="block text-sm font-medium text-slate-700 mb-1.5">Seçici</label>
+        <input type="text" id="selector" name="selector" placeholder=".filtre-buton veya text=Satın Al"
+               class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
+        <p class="text-xs text-slate-400 mt-1">CSS seçici (.sinif, #id) veya Playwright metin seçici (text=Buton Metni)</p>
+      </div>
+
+      <div data-step-field="value" class="hidden">
+        <label for="value" class="block text-sm font-medium text-slate-700 mb-1.5">Değer / Metin</label>
+        <input type="text" id="value" name="value" placeholder="Aranan metin veya yazılacak değer"
+               class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div data-step-field="operator" class="hidden">
+          <label for="operator" class="block text-sm font-medium text-slate-700 mb-1.5">Karşılaştırma</label>
+          <select id="operator" name="operator"
+                  class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition">
+            {% for key, label in operator_labels.items() %}
+            <option value="{{ key }}">{{ label }} ({{ key }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div data-step-field="count" class="hidden">
+          <label for="count" class="block text-sm font-medium text-slate-700 mb-1.5">Sayı</label>
+          <input type="number" id="count" name="count" placeholder="3"
+                 class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
+        </div>
+      </div>
+
+      <div data-step-field="wait_ms" class="hidden">
+        <label for="wait_ms" class="block text-sm font-medium text-slate-700 mb-1.5">Bekleme süresi (ms)</label>
+        <input type="number" id="wait_ms" name="wait_ms" placeholder="1000"
+               class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button type="button" onclick="document.getElementById('add-step-modal').close()"
+                class="text-sm font-medium text-slate-600 hover:bg-slate-100 px-4 py-2 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300">
+          Vazgeç
+        </button>
+        <button id="step-submit-button" type="submit"
+                class="bg-brand-600 text-white text-sm font-medium px-4 py-2 rounded-lg shadow-sm hover:bg-brand-700 transition">
+          Ekle
+        </button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<dialog id="delete-scenario-modal" class="rounded-2xl border-0 p-0 shadow-xl w-full max-w-sm">
+  <div class="p-6">
+    <div class="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center mb-4">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M8.75 1a.75.75 0 0 0-.75.75V3H4a.75.75 0 0 0 0 1.5h.28l.7 10.48A2.25 2.25 0 0 0 7.22 17h5.56a2.25 2.25 0 0 0 2.24-2.02l.7-10.48H16A.75.75 0 0 0 16 3h-4v-.25a.75.75 0 0 0-.75-.75h-2.5ZM8.5 7.25a.75.75 0 0 1 1.5 0v6.5a.75.75 0 0 1-1.5 0v-6.5Zm3.5 0a.75.75 0 0 1 1.5 0v6.5a.75.75 0 0 1-1.5 0v-6.5Z" clip-rule="evenodd" />
+      </svg>
+    </div>
+    <h2 class="text-lg font-semibold text-slate-900">Senaryoyu sil</h2>
+    <p class="text-sm text-slate-600 mt-1.5">"{{ scenario.name }}" senaryosunu ve tüm çalıştırma geçmişini silmek istediğine emin misin? Bu işlem geri alınamaz.</p>
+    <form method="post" action="/projects/{{ project.id }}/environments/{{ environment.id }}/scenarios/{{ scenario.id }}/delete" class="flex items-center justify-end gap-2 mt-6">
+      <button type="button" onclick="document.getElementById('delete-scenario-modal').close()"
+              class="text-sm font-medium text-slate-600 hover:bg-slate-100 px-4 py-2 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300">
+        Vazgeç
+      </button>
+      <button type="submit"
+              class="bg-red-600 text-white text-sm font-medium px-4 py-2 rounded-lg shadow-sm hover:bg-red-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300">
+        Evet, sil
+      </button>
+    </form>
+  </div>
+</dialog>
+
+<script src="{{ static_asset_url('js/app.js') }}"></script>
+{% endblock %}

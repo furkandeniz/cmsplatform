@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Kontrol Detayı · {{ check.environment.name }} · CMSPlus{% endblock %}
+
+{% block content %}
+<a href="/health-checks?environment_id={{ check.environment.id }}" class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 mb-4 transition">
+  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+    <path fill-rule="evenodd" d="M12.79 4.21a.75.75 0 0 1 0 1.06L8.06 10l4.73 4.73a.75.75 0 1 1-1.06 1.06l-5.26-5.26a.75.75 0 0 1 0-1.06l5.26-5.26a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" />
+  </svg>
+  {{ check.environment.name }} geçmişine dön
+</a>
+
+<div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+  <div class="flex items-start justify-between gap-4 flex-wrap">
+    <div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <h1 class="text-xl font-bold text-slate-900">{{ check.environment.project.name }} · {{ check.environment.name }}</h1>
+        {% if check.ok %}
+        <span class="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          Başarılı
+        </span>
+        {% else %}
+        <span class="inline-flex items-center gap-1 text-xs font-medium text-red-700 bg-red-50 px-2 py-0.5 rounded-full">
+          <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+          Başarısız
+        </span>
+        {% endif %}
+      </div>
+      <a href="{{ check.environment.url }}" target="_blank" rel="noopener noreferrer"
+         class="text-sm text-slate-500 hover:text-brand-600 transition break-all">
+        {{ check.environment.url }}
+      </a>
+    </div>
+    <a href="/health-checks/{{ check.id }}/json" target="_blank" rel="noopener noreferrer"
+       class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 px-3 py-2 rounded-lg transition">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M4.5 2A1.5 1.5 0 0 0 3 3.5v13A1.5 1.5 0 0 0 4.5 18h11a1.5 1.5 0 0 0 1.5-1.5V7.621a1.5 1.5 0 0 0-.44-1.06l-4.622-4.622A1.5 1.5 0 0 0 10.878 1.5H4.5ZM6 12a1 1 0 1 0 0 2h1a1 1 0 1 0 0-2H6Zm0-3a1 1 0 1 0 0 2h5a1 1 0 1 0 0-2H6Z" clip-rule="evenodd" />
+      </svg>
+      Ham JSON
+    </a>
+  </div>
+
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-5 border-t border-slate-100">
+    <div>
+      <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">HTTP Kodu</p>
+      <p class="text-sm font-semibold text-slate-900 mt-0.5">{% if check.status_code %}{{ check.status_code }}{% else %}—{% endif %}</p>
+    </div>
+    <div>
+      <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Süre</p>
+      <p class="text-sm font-semibold text-slate-900 mt-0.5">{% if check.response_ms is not none %}{{ check.response_ms }}ms{% else %}—{% endif %}</p>
+    </div>
+    <div>
+      <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">İçerik Tipi</p>
+      <p class="text-sm font-semibold text-slate-900 mt-0.5 truncate">{{ check.content_type or '—' }}</p>
+    </div>
+    <div>
+      <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Zaman</p>
+      <p class="text-sm font-semibold text-slate-900 mt-0.5">{{ check.checked_at.strftime('%d.%m.%Y %H:%M:%S') }}</p>
+    </div>
+  </div>
+
+  {% if check.error %}
+  <div class="mt-5 pt-5 border-t border-slate-100">
+    <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">Hata</p>
+    <p class="text-sm text-red-700 bg-red-50 rounded-lg px-3 py-2">{{ check.error }}</p>
+  </div>
+  {% endif %}
+</div>
+
+<div class="mt-6">
+  <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">JSON</h2>
+  <div class="bg-slate-900 rounded-2xl p-5 overflow-x-auto">
+    <pre class="text-xs text-slate-100 leading-relaxed"><code>{{ check_json | tojson_pretty }}</code></pre>
+  </div>
+</div>
+
+{% if check.response_body %}
+<div class="mt-6">
+  <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Yanıt Gövdesi (ilk {{ check.response_body|length }} karakter)</h2>
+  <div class="bg-white border border-slate-200 rounded-2xl p-5 overflow-x-auto">
+    <pre class="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap break-all">{{ check.response_body }}</pre>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

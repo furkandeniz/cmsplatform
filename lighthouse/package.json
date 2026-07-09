@@ -1,0 +1,10 @@
+{
+  "name": "cmsplus-lighthouse",
+  "private": true,
+  "type": "module",
+  "description": "Node helper used by the CMSPlus Python app to run Lighthouse audits and print the JSON report to stdout.",
+  "dependencies": {
+    "lighthouse": "12.8.2",
+    "chrome-launcher": "^1.1.2"
+  }
+}

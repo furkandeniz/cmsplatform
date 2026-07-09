@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+lighthouse/node_modules/
+app/static/uploads/

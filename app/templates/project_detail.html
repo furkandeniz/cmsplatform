@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project.name }} · CMSPlus{% endblock %}
+
+{% block content %}
+{% macro status_dot(ok) -%}
+{%- if ok is none -%}bg-slate-300
+{%- elif ok -%}bg-emerald-500
+{%- else -%}bg-red-500
+{%- endif -%}
+{%- endmacro %}
+<a href="/" class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 mb-4 transition">
+  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+    <path fill-rule="evenodd" d="M12.79 4.21a.75.75 0 0 1 0 1.06L8.06 10l4.73 4.73a.75.75 0 1 1-1.06 1.06l-5.26-5.26a.75.75 0 0 1 0-1.06l5.26-5.26a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" />
+  </svg>
+  Projelere dön
+</a>
+
+<div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+  <div class="flex items-start justify-between gap-4">
+    <div class="flex items-start gap-4">
+      {% if project.logo_path %}
+      <img src="/static/{{ project.logo_path }}" alt="{{ project.name }} logosu"
+           class="w-16 h-16 rounded-2xl object-contain border border-slate-100 shrink-0 bg-white" />
+      {% else %}
+      <div class="w-16 h-16 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center text-2xl font-semibold shrink-0">
+        {{ project.name[:1]|upper }}
+      </div>
+      {% endif %}
+      <div class="min-w-0">
+        <h1 class="text-2xl font-bold text-slate-900">{{ project.name }}</h1>
+        <p class="text-xs text-slate-400 mt-1">
+          Eklenme tarihi: {{ project.created_at.strftime('%d.%m.%Y %H:%M') }}
+        </p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-1 shrink-0">
+      <a href="/projects/{{ project.id }}/edit"
+         class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-100 px-3 py-2 rounded-lg transition">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M13.586 3.586a2 2 0 1 1 2.828 2.828l-.793.793-2.828-2.828.793-.793ZM11.379 5.793 3 14.172V17h2.828l8.38-8.379-2.83-2.828Z" />
+        </svg>
+        Düzenle
+      </a>
+      <button type="button"
+              class="inline-flex items-center gap-1.5 text-sm font-medium text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg transition"
+              data-project-id="{{ project.id }}" data-project-name="{{ project.name }}"
+              onclick="openDeleteModal(this)">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M8.75 1a.75.75 0 0 0-.75.75V3H4a.75.75 0 0 0 0 1.5h.28l.7 10.48A2.25 2.25 0 0 0 7.22 17h5.56a2.25 2.25 0 0 0 2.24-2.02l.7-10.48H16A.75.75 0 0 0 16 3h-4v-.25a.75.75 0 0 0-.75-.75h-2.5ZM8.5 7.25a.75.75 0 0 1 1.5 0v6.5a.75.75 0 0 1-1.5 0v-6.5Zm3.5 0a.75.75 0 0 1 1.5 0v6.5a.75.75 0 0 1-1.5 0v-6.5Z" clip-rule="evenodd" />
+        </svg>
+        Sil
+      </button>
+    </div>
+  </div>
+
+  {% if project.notes %}
+  <div class="mt-6 pt-5 border-t border-slate-100">
+    <h2 class="text-sm font-semibold text-slate-700 mb-1.5">Notlar</h2>
+    <p class="text-sm text-slate-600 whitespace-pre-line">{{ project.notes }}</p>
+  </div>
+  {% endif %}
+</div>
+
+<div class="mt-8">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide">Ortamlar</h2>
+    <div class="flex items-center gap-4">
+      {% if project.environments|length >= 2 %}
+      <a href="/projects/{{ project.id }}/compare"
+         class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-900 transition">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M4 4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4Zm7 0a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1V4Z" />
+        </svg>
+        Ortamları Karşılaştır
+      </a>
+      {% endif %}
+      <a href="/projects/{{ project.id }}/environments/new"
+         class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700 transition">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M10 4a1 1 0 0 1 1 1v4h4a1 1 0 1 1 0 2h-4v4a1 1 0 1 1-2 0v-4H5a1 1 0 1 1 0-2h4V5a1 1 0 0 1 1-1Z" />
+        </svg>
+        Ortam Ekle
+      </a>
+    </div>
+  </div>
+
+  {% if project.environments %}
+  <div class="space-y-3">
+    {% for environment in project.environments %}
+    <a href="/projects/{{ project.id }}/environments/{{ environment.id }}"
+       class="block bg-white border border-slate-200 rounded-xl p-4 hover:border-slate-300 hover:shadow-sm transition">
+      <div class="flex items-center justify-between gap-4 flex-wrap">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-semibold text-slate-900">{{ environment.name }}</span>
+            {% if environment.is_primary %}
+            <span class="text-xs font-medium bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full whitespace-nowrap">Birincil</span>
+            {% endif %}
+            {% if environment.drupal_version %}
+            <span class="text-xs font-medium bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full whitespace-nowrap">
+              Drupal {{ environment.drupal_version }}
+            </span>
+            {% endif %}
+          </div>
+          <p class="text-sm text-slate-500 truncate mt-0.5">{{ environment.url }}</p>
+        </div>
+
+        <div class="flex items-center gap-3 shrink-0">
+          <div class="flex items-center gap-1.5" title="Sağlık · SSL · SEO · Lighthouse">
+            <span class="w-2 h-2 rounded-full {{ status_dot(environment.last_check_ok) }}"></span>
+            <span class="w-2 h-2 rounded-full {{ status_dot(environment.ssl_ok) }}"></span>
+            <span class="w-2 h-2 rounded-full {{ status_dot(environment.last_seo_ok) }}"></span>
+            <span class="w-2 h-2 rounded-full {{ status_dot(environment.last_lighthouse_ok) }}"></span>
+          </div>
+          <span class="inline-flex items-center gap-1 text-sm font-medium text-brand-600">
+            Detaylar
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M7.21 4.21a.75.75 0 0 1 1.06 0l5.26 5.26a.75.75 0 0 1 0 1.06l-5.26 5.26a.75.75 0 0 1-1.06-1.06L11.94 10 7.21 5.27a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
+            </svg>
+          </span>
+        </div>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="bg-white border border-dashed border-slate-300 rounded-xl p-8 text-center">
+    <p class="text-slate-500 text-sm">Henüz ortam eklenmedi.</p>
+    <a href="/projects/{{ project.id }}/environments/new" class="inline-flex items-center gap-1.5 mt-3 text-sm font-medium text-brand-600 hover:text-brand-700">
+      İlk ortamı ekle →
+    </a>
+  </div>
+  {% endif %}
+</div>
+
+<div class="mt-8">
+  <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Yakında</h2>
+  <div class="grid gap-4 sm:grid-cols-2">
+    <div class="bg-white border border-dashed border-slate-200 rounded-xl p-5 text-center">
+      <div class="w-9 h-9 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4.5 h-4.5" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M4 5a2 2 0 0 1 2-2h.5a.5.5 0 0 1 .4.2l1 1.3H14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5Zm6 3.25a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5Z" clip-rule="evenodd" />
+        </svg>
+      </div>
+      <p class="text-sm font-medium text-slate-600">Ekran Görüntüsü</p>
+    </div>
+    <div class="bg-white border border-dashed border-slate-200 rounded-xl p-5 text-center">
+      <div class="w-9 h-9 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4.5 h-4.5" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M10 2a6 6 0 0 0-6 6v3.09c0 .4-.16.78-.44 1.06L2.5 13.2a1 1 0 0 0 .7 1.7h13.6a1 1 0 0 0 .7-1.7l-1.06-1.05a1.5 1.5 0 0 1-.44-1.06V8a6 6 0 0 0-6-6ZM8.3 16.5a1.75 1.75 0 0 0 3.4 0h-3.4Z" />
+        </svg>
+      </div>
+      <p class="text-sm font-medium text-slate-600">Alertler</p>
+    </div>
+  </div>
+</div>
+
+<dialog id="delete-modal" class="rounded-2xl border-0 p-0 shadow-xl w-full max-w-sm">
+  <div class="p-6">
+    <div class="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center mb-4">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M8.75 1a.75.75 0 0 0-.75.75V3H4a.75.75 0 0 0 0 1.5h.28l.7 10.48A2.25 2.25 0 0 0 7.22 17h5.56a2.25 2.25 0 0 0 2.24-2.02l.7-10.48H16A.75.75 0 0 0 16 3h-4v-.25a.75.75 0 0 0-.75-.75h-2.5ZM8.5 7.25a.75.75 0 0 1 1.5 0v6.5a.75.75 0 0 1-1.5 0v-6.5Zm3.5 0a.75.75 0 0 1 1.5 0v6.5a.75.75 0 0 1-1.5 0v-6.5Z" clip-rule="evenodd" />
+      </svg>
+    </div>
+    <h2 class="text-lg font-semibold text-slate-900">Projeyi sil</h2>
+    <p class="text-sm text-slate-600 mt-1.5">
+      <span id="delete-modal-project-name" class="font-medium text-slate-900"></span> projesini silmek istediğine emin misin?
+      Bu işlem geri alınamaz.
+    </p>
+    <form id="delete-modal-form" method="post" class="flex items-center justify-end gap-2 mt-6">
+      <button type="button" onclick="document.getElementById('delete-modal').close()"
+              class="text-sm font-medium text-slate-600 hover:bg-slate-100 px-4 py-2 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300">
+        Vazgeç
+      </button>
+      <button type="submit"
+              class="bg-red-600 text-white text-sm font-medium px-4 py-2 rounded-lg shadow-sm hover:bg-red-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300">
+        Evet, sil
+      </button>
+    </form>
+  </div>
+</dialog>
+
+<script src="{{ static_asset_url('js/app.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}{{ comparison.environment_a.name }} vs {{ comparison.environment_b.name }} · {{ project.name }} · CMSPlus{% endblock %}
+
+{% block content %}
+<a href="/projects/{{ project.id }}/compare" class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 mb-4 transition">
+  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+    <path fill-rule="evenodd" d="M12.79 4.21a.75.75 0 0 1 0 1.06L8.06 10l4.73 4.73a.75.75 0 1 1-1.06 1.06l-5.26-5.26a.75.75 0 0 1 0-1.06l5.26-5.26a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" />
+  </svg>
+  Karşılaştırma geçmişine dön
+</a>
+
+<div class="flex items-center justify-between gap-4 flex-wrap mb-6">
+  <div>
+    <h1 class="text-2xl font-bold text-slate-900">
+      {{ comparison.environment_a.name }} <span class="text-slate-400 font-normal">vs</span> {{ comparison.environment_b.name }}
+    </h1>
+    <p class="text-slate-500 text-sm mt-1">
+      {{ project.name }} · {{ comparison.created_at.strftime('%d.%m.%Y %H:%M') }} · {{ comparison.pages|length }} sayfa
+    </p>
+  </div>
+  <button type="button"
+          class="inline-flex items-center gap-1.5 text-sm font-medium text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg transition"
+          onclick="document.getElementById('delete-comparison-modal').showModal()">
+    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+      <path fill-rule="evenodd" d="M8.75 1a.75.75 0 0 0-.75.75V3H4a.75.75 0 0 0 0 1.5h.28l.7 10.48A2.25 2.25 0 0 0 7.22 17h5.56a2.25 2.25 0 0 0 2.24-2.02l.7-10.48H16A.75.75 0 0 0 16 3h-4v-.25a.75.75 0 0 0-.75-.75h-2.5ZM8.5 7.25a.75.75 0 0 1 1.5 0v6.5a.75.75 0 0 1-1.5 0v-6.5Zm3.5 0a.75.75 0 0 1 1.5 0v6.5a.75.75 0 0 1-1.5 0v-6.5Z" clip-rule="evenodd" />
+    </svg>
+    Sil
+  </button>
+</div>
+
+<div class="space-y-6">
+  {% for page in comparison.pages %}
+  <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+    <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+      <h2 class="font-mono text-sm font-semibold text-slate-800">{{ page.path }}</h2>
+      {% if page.ok %}
+        {% if page.has_differences %}
+        <span class="inline-flex items-center gap-1 text-xs font-medium text-red-700 bg-red-50 px-2.5 py-1 rounded-full whitespace-nowrap">
+          <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+          Fark bulundu · %{{ page.diff_percentage }}
+        </span>
+        {% else %}
+        <span class="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full whitespace-nowrap">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          Aynı · %{{ page.diff_percentage }} fark
+        </span>
+        {% endif %}
+      {% else %}
+      <span class="inline-flex items-center gap-1 text-xs font-medium text-red-700 bg-red-50 px-2.5 py-1 rounded-full whitespace-nowrap">
+        Başarısız
+      </span>
+      {% endif %}
+    </div>
+
+    {% if page.ok %}
+    <div class="grid gap-3 sm:grid-cols-3 mb-3 text-xs">
+      <a href="/static/{{ page.screenshot_a_path }}" target="_blank" rel="noopener noreferrer"
+         class="text-center font-medium text-slate-500 hover:text-brand-600 transition py-2 border border-slate-200 rounded-lg">
+        {{ comparison.environment_a.name }} ekran görüntüsü ↗
+      </a>
+      <a href="/static/{{ page.screenshot_b_path }}" target="_blank" rel="noopener noreferrer"
+         class="text-center font-medium text-slate-500 hover:text-brand-600 transition py-2 border border-slate-200 rounded-lg">
+        {{ comparison.environment_b.name }} ekran görüntüsü ↗
+      </a>
+      <a href="/static/{{ page.diff_image_path }}" target="_blank" rel="noopener noreferrer"
+         class="text-center font-medium text-brand-600 hover:text-brand-700 transition py-2 border border-brand-100 bg-brand-50 rounded-lg">
+        Farklar (tam boy) ↗
+      </a>
+    </div>
+    <a href="/static/{{ page.diff_image_path }}" target="_blank" rel="noopener noreferrer">
+      <img src="/static/{{ page.diff_image_path }}" alt="{{ page.path }} farkları"
+           class="w-full rounded-xl border border-slate-200" />
+    </a>
+    {% else %}
+    <p class="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{{ page.error }}</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<dialog id="delete-comparison-modal" class="rounded-2xl border-0 p-0 shadow-xl w-full max-w-sm">
+  <div class="p-6">
+    <div class="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center mb-4">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M8.75 1a.75.75 0 0 0-.75.75V3H4a.75.75 0 0 0 0 1.5h.28l.7 10.48A2.25 2.25 0 0 0 7.22 17h5.56a2.25 2.25 0 0 0 2.24-2.02l.7-10.48H16A.75.75 0 0 0 16 3h-4v-.25a.75.75 0 0 0-.75-.75h-2.5ZM8.5 7.25a.75.75 0 0 1 1.5 0v6.5a.75.75 0 0 1-1.5 0v-6.5Zm3.5 0a.75.75 0 0 1 1.5 0v6.5a.75.75 0 0 1-1.5 0v-6.5Z" clip-rule="evenodd" />
+      </svg>
+    </div>
+    <h2 class="text-lg font-semibold text-slate-900">Karşılaştırmayı sil</h2>
+    <p class="text-sm text-slate-600 mt-1.5">Bu karşılaştırmayı ve tüm ekran görüntülerini silmek istediğine emin misin? Bu işlem geri alınamaz.</p>
+    <form method="post" action="/projects/{{ project.id }}/compare/{{ comparison.id }}/delete" class="flex items-center justify-end gap-2 mt-6">
+      <button type="button" onclick="document.getElementById('delete-comparison-modal').close()"
+              class="text-sm font-medium text-slate-600 hover:bg-slate-100 px-4 py-2 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300">
+        Vazgeç
+      </button>
+      <button type="submit"
+              class="bg-red-600 text-white text-sm font-medium px-4 py-2 rounded-lg shadow-sm hover:bg-red-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300">
+        Evet, sil
+      </button>
+    </form>
+  </div>
+</dialog>
+{% endblock %}

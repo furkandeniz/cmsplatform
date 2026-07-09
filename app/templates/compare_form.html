@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Ortamları Karşılaştır · {{ project.name }} · CMSPlus{% endblock %}
+
+{% block content %}
+<a href="/projects/{{ project.id }}/compare" class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 mb-4 transition">
+  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+    <path fill-rule="evenodd" d="M12.79 4.21a.75.75 0 0 1 0 1.06L8.06 10l4.73 4.73a.75.75 0 1 1-1.06 1.06l-5.26-5.26a.75.75 0 0 1 0-1.06l5.26-5.26a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" />
+  </svg>
+  Karşılaştırma geçmişine dön
+</a>
+
+<div class="max-w-lg">
+  <h1 class="text-2xl font-bold text-slate-900 mb-1">Ortamları Karşılaştır</h1>
+  <p class="text-slate-500 text-sm mb-6">
+    İki ortamın aynı sayfalarının ekran görüntüsünü al ve farkları işaretle.
+  </p>
+
+  <form method="post" action="/projects/{{ project.id }}/compare" class="bg-white border border-slate-200 rounded-2xl p-6 space-y-5 shadow-sm">
+    <div>
+      <label for="environment_a_id" class="block text-sm font-medium text-slate-700 mb-1.5">Ortam A</label>
+      <select id="environment_a_id" name="environment_a_id" required
+              class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition">
+        {% for environment in project.environments %}
+        <option value="{{ environment.id }}" {% if environment.is_primary %}selected{% endif %}>{{ environment.name }} — {{ environment.url }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label for="environment_b_id" class="block text-sm font-medium text-slate-700 mb-1.5">Ortam B</label>
+      <select id="environment_b_id" name="environment_b_id" required
+              class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition">
+        {% for environment in project.environments %}
+        <option value="{{ environment.id }}" {% if not environment.is_primary %}selected{% endif %}>{{ environment.name }} — {{ environment.url }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label for="paths" class="block text-sm font-medium text-slate-700 mb-1.5">Karşılaştırılacak sayfalar</label>
+      <textarea id="paths" name="paths" rows="5" required placeholder="/&#10;/hakkimizda&#10;/urunler/123"
+                class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition"></textarea>
+      <p class="text-xs text-slate-400 mt-1.5">Her satıra bir yol yaz. Bu yol her iki ortamın URL'sine eklenerek karşılaştırılır.</p>
+    </div>
+
+    <div class="flex items-center gap-3 pt-2">
+      <button type="submit"
+              class="bg-brand-600 text-white text-sm font-medium px-4 py-2.5 rounded-lg shadow-sm hover:bg-brand-700 hover:shadow transition">
+        Karşılaştır
+      </button>
+      <a href="/projects/{{ project.id }}" class="text-sm font-medium text-slate-500 hover:text-slate-800 transition">Vazgeç</a>
+    </div>
+    <p class="text-xs text-slate-400">Sayfa sayısına bağlı olarak bu işlem biraz zaman alabilir (her sayfa için iki ekran görüntüsü alınır).</p>
+  </form>
+</div>
+{% endblock %}
