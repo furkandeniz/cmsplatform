@@ -87,6 +87,7 @@
                 data-path="{{ step.path or '' }}"
                 data-selector="{{ step.selector or '' }}"
                 data-value="{{ step.value or '' }}"
+                data-value2="{{ step.value2 or '' }}"
                 data-operator="{{ step.operator or '' }}"
                 data-count="{{ step.count if step.count is not none else '' }}"
                 data-wait-ms="{{ step.wait_ms if step.wait_ms is not none else '' }}"
@@ -108,10 +109,12 @@
 </div>
 
 <div>
-  <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Çalıştırma Geçmişi</h2>
-  {% if scenario.runs %}
+  <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
+    Çalıştırma Geçmişi{% if runs_total %} <span class="text-slate-400 normal-case font-normal">({{ runs_total }})</span>{% endif %}
+  </h2>
+  {% if runs %}
   <div class="space-y-2">
-    {% for run in scenario.runs %}
+    {% for run in runs %}
     <a href="/projects/{{ project.id }}/environments/{{ environment.id }}/scenarios/{{ scenario.id }}/runs/{{ run.id }}"
        class="block bg-white border border-slate-200 rounded-xl p-3.5 hover:border-slate-300 hover:shadow-sm transition">
       <div class="flex items-center justify-between gap-3 flex-wrap">
@@ -134,6 +137,19 @@
     </a>
     {% endfor %}
   </div>
+  {% if runs_total_pages and runs_total_pages > 1 %}
+  <div class="flex items-center justify-between gap-3 mt-4">
+    <a href="?page={{ runs_page - 1 }}"
+       class="text-sm font-medium px-3 py-1.5 rounded-lg border border-slate-200 transition {% if runs_page <= 1 %}text-slate-300 pointer-events-none{% else %}text-slate-600 hover:bg-slate-100{% endif %}">
+      Önceki
+    </a>
+    <span class="text-xs text-slate-400">Sayfa {{ runs_page }} / {{ runs_total_pages }}</span>
+    <a href="?page={{ runs_page + 1 }}"
+       class="text-sm font-medium px-3 py-1.5 rounded-lg border border-slate-200 transition {% if runs_page >= runs_total_pages %}text-slate-300 pointer-events-none{% else %}text-slate-600 hover:bg-slate-100{% endif %}">
+      Sonraki
+    </a>
+  </div>
+  {% endif %}
   {% else %}
   <div class="bg-white border border-dashed border-slate-300 rounded-xl p-8 text-center">
     <p class="text-slate-500 text-sm">Bu senaryo henüz çalıştırılmadı.</p>
@@ -172,9 +188,16 @@
       </div>
 
       <div data-step-field="value" class="hidden">
-        <label for="value" class="block text-sm font-medium text-slate-700 mb-1.5">Değer / Metin</label>
-        <input type="text" id="value" name="value" placeholder="Aranan metin veya yazılacak değer"
+        <label for="value" class="block text-sm font-medium text-slate-700 mb-1.5">Değer / Metin / Değişken Adı</label>
+        <input type="text" id="value" name="value" placeholder="Aranan metin, yazılacak değer veya değişken adı"
                class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
+      </div>
+
+      <div data-step-field="value2" class="hidden">
+        <label for="value2" class="block text-sm font-medium text-slate-700 mb-1.5">İkinci Değişken Adı</label>
+        <input type="text" id="value2" name="value2" placeholder="örn: yeni_fiyat"
+               class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
+        <p class="text-xs text-slate-400 mt-1">Karşılaştırılacak diğer kaydedilmiş değişkenin adı ("Değer kaydet" adımında verdiğin isim).</p>
       </div>
 
       <div class="grid grid-cols-2 gap-3">

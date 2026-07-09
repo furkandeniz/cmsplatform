@@ -2,6 +2,7 @@ import json
 import shutil
 import uuid
 from datetime import datetime, timedelta, timezone
+from math import ceil
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlencode
@@ -11,7 +12,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 from starlette.status import HTTP_303_SEE_OTHER
 
@@ -1119,13 +1120,38 @@ def create_scenario(project_id: int, environment_id: int, name: str = Form(...))
     )
 
 
+SCENARIO_RUNS_PAGE_SIZE = 10
+
+
 @app.get("/projects/{project_id}/environments/{environment_id}/scenarios/{scenario_id}")
-def scenario_detail(project_id: int, environment_id: int, scenario_id: int, request: Request):
+def scenario_detail(
+    project_id: int,
+    environment_id: int,
+    scenario_id: int,
+    request: Request,
+    page: int = 1,
+):
     with SessionLocal() as db:
         project = _get_project_or_404(db, project_id)
         environment = _get_environment_or_404(db, project_id, environment_id)
         scenario = _get_scenario_or_404(db, environment_id, scenario_id)
         steps_with_description = [(step, describe_step(step)) for step in scenario.steps]
+
+        total_runs = db.scalar(
+            select(func.count())
+            .select_from(ScenarioRun)
+            .where(ScenarioRun.scenario_id == scenario_id)
+        )
+        total_pages = ceil(total_runs / SCENARIO_RUNS_PAGE_SIZE) if total_runs else 1
+        page = min(max(page, 1), total_pages)
+        runs = db.scalars(
+            select(ScenarioRun)
+            .where(ScenarioRun.scenario_id == scenario_id)
+            .order_by(ScenarioRun.run_at.desc())
+            .offset((page - 1) * SCENARIO_RUNS_PAGE_SIZE)
+            .limit(SCENARIO_RUNS_PAGE_SIZE)
+        ).all()
+
         return templates.TemplateResponse(
             request,
             "scenario_detail.html",
@@ -1136,6 +1162,10 @@ def scenario_detail(project_id: int, environment_id: int, scenario_id: int, requ
                 "steps_with_description": steps_with_description,
                 "step_type_labels": SCENARIO_STEP_TYPE_LABELS,
                 "operator_labels": SCENARIO_OPERATOR_LABELS,
+                "runs": runs,
+                "runs_page": page,
+                "runs_total_pages": total_pages,
+                "runs_total": total_runs,
             },
         )
 
@@ -1149,6 +1179,7 @@ def add_scenario_step(
     path: Optional[str] = Form(None),
     selector: Optional[str] = Form(None),
     value: Optional[str] = Form(None),
+    value2: Optional[str] = Form(None),
     operator: Optional[str] = Form(None),
     count: Optional[str] = Form(None),
     wait_ms: Optional[str] = Form(None),
@@ -1165,6 +1196,7 @@ def add_scenario_step(
             path=(path or "").strip() or None,
             selector=(selector or "").strip() or None,
             value=(value or "").strip() or None,
+            value2=(value2 or "").strip() or None,
             operator=(operator or "").strip() or None,
             count=_parse_optional_int(count),
             wait_ms=_parse_optional_int(wait_ms),
@@ -1204,6 +1236,7 @@ def edit_scenario_step(
     path: Optional[str] = Form(None),
     selector: Optional[str] = Form(None),
     value: Optional[str] = Form(None),
+    value2: Optional[str] = Form(None),
     operator: Optional[str] = Form(None),
     count: Optional[str] = Form(None),
     wait_ms: Optional[str] = Form(None),
@@ -1217,6 +1250,7 @@ def edit_scenario_step(
         step.path = (path or "").strip() or None
         step.selector = (selector or "").strip() or None
         step.value = (value or "").strip() or None
+        step.value2 = (value2 or "").strip() or None
         step.operator = (operator or "").strip() or None
         step.count = _parse_optional_int(count)
         step.wait_ms = _parse_optional_int(wait_ms)

@@ -28,6 +28,8 @@ const SCENARIO_STEP_FIELDS = {
   assert_element: ["selector"],
   assert_count: ["selector", "operator", "count"],
   screenshot: [],
+  save_value: ["selector", "value"],
+  compare_values: ["value", "value2", "operator"],
 };
 
 function updateScenarioStepFields() {
@@ -62,6 +64,7 @@ function openEditStepModal(button) {
   document.getElementById("path").value = button.dataset.path || "";
   document.getElementById("selector").value = button.dataset.selector || "";
   document.getElementById("value").value = button.dataset.value || "";
+  document.getElementById("value2").value = button.dataset.value2 || "";
   if (button.dataset.operator) {
     document.getElementById("operator").value = button.dataset.operator;
   }

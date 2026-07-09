@@ -303,6 +303,7 @@ class ScenarioStep(Base):
     path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     selector: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     value: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    value2: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     operator: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)
     count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     wait_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

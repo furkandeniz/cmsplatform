@@ -4,3 +4,5 @@ __pycache__/
 .env
 lighthouse/node_modules/
 app/static/uploads/
+backups/*
+!backups/.gitkeep
