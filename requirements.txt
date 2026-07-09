@@ -11,3 +11,4 @@ playwright==1.60.0
 pandas==2.3.3
 apscheduler==3.11.3
 Pillow==11.3.0
+itsdangerous==2.2.0

@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}Kullanıcılar · CMSPlus{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between gap-4 flex-wrap mb-6">
+  <div>
+    <h1 class="text-2xl font-bold text-slate-900">Kullanıcılar</h1>
+    <p class="text-slate-500 text-sm mt-1">Sisteme giriş yapabilecek kullanıcılar ve proje erişimleri</p>
+  </div>
+  <button type="button" onclick="openAddUserModal()"
+          class="inline-flex items-center gap-1.5 bg-brand-600 text-white text-sm font-medium px-4 py-2.5 rounded-lg shadow-sm hover:bg-brand-700 hover:shadow transition">
+    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+      <path d="M10 4a1 1 0 0 1 1 1v4h4a1 1 0 1 1 0 2h-4v4a1 1 0 1 1-2 0v-4H5a1 1 0 1 1 0-2h4V5a1 1 0 0 1 1-1Z" />
+    </svg>
+    Kullanıcı Ekle
+  </button>
+</div>
+
+{% if error %}
+<p class="text-sm text-red-700 bg-red-50 rounded-lg px-3 py-2 mb-4">{{ error }}</p>
+{% endif %}
+
+<div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-50 border-b border-slate-200">
+      <tr>
+        <th class="text-left font-semibold text-slate-500 px-4 py-2.5">Ad Soyad</th>
+        <th class="text-left font-semibold text-slate-500 px-4 py-2.5">E-posta</th>
+        <th class="text-left font-semibold text-slate-500 px-4 py-2.5">Rol</th>
+        <th class="text-left font-semibold text-slate-500 px-4 py-2.5">Görebildiği Projeler</th>
+        <th class="text-right font-semibold text-slate-500 px-4 py-2.5">İşlemler</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for user in users %}
+      <tr>
+        <td class="px-4 py-3 text-slate-800">{{ user.full_name }}</td>
+        <td class="px-4 py-3 text-slate-500">{{ user.email }}</td>
+        <td class="px-4 py-3">
+          {% if user.role == 'admin' %}
+          <span class="text-xs font-medium bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full">Admin</span>
+          {% else %}
+          <span class="text-xs font-medium bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">Kullanıcı</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-3 text-slate-500">
+          {% if user.role == 'admin' %}
+          Tümü
+          {% elif user.projects %}
+          {{ user.projects|map(attribute='name')|join(', ') }}
+          {% else %}
+          <span class="italic text-slate-400">Hiçbiri</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-3">
+          <div class="flex items-center justify-end gap-1">
+            <button type="button"
+                    onclick="openEditUserModal(this)"
+                    data-user-id="{{ user.id }}"
+                    data-full-name="{{ user.full_name }}"
+                    data-email="{{ user.email }}"
+                    data-role="{{ user.role }}"
+                    data-project-ids="{{ user.projects|map(attribute='id')|join(',') }}"
+                    class="text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-100 px-2.5 py-1.5 rounded-lg transition">
+              Düzenle
+            </button>
+            {% if user.id != request.session.get('user_id') and not (user.role == 'admin' and admin_count <= 1) %}
+            <button type="button"
+                    onclick="openDeleteUserModal(this)"
+                    data-user-id="{{ user.id }}"
+                    data-full-name="{{ user.full_name }}"
+                    class="text-xs font-medium text-red-500 hover:text-red-700 hover:bg-red-50 px-2.5 py-1.5 rounded-lg transition">
+              Sil
+            </button>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<dialog id="user-modal" class="rounded-2xl border-0 p-0 shadow-xl w-full max-w-md">
+  <div class="p-6">
+    <h2 id="user-modal-title" class="text-lg font-semibold text-slate-900 mb-4">Kullanıcı Ekle</h2>
+    <form id="user-form" method="post" action="/users" class="space-y-4">
+      <div>
+        <label for="full_name" class="block text-sm font-medium text-slate-700 mb-1.5">Ad Soyad</label>
+        <input type="text" id="full_name" name="full_name" required
+               class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
+      </div>
+      <div>
+        <label for="email" class="block text-sm font-medium text-slate-700 mb-1.5">E-posta</label>
+        <input type="email" id="email" name="email" required
+               class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
+      </div>
+      <div>
+        <label id="password-label" for="password" class="block text-sm font-medium text-slate-700 mb-1.5">Şifre</label>
+        <input type="password" id="password" name="password" minlength="8"
+               class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
+      </div>
+      <div>
+        <label for="role" class="block text-sm font-medium text-slate-700 mb-1.5">Rol</label>
+        <select id="role" name="role" required onchange="updateUserFormFields()"
+                class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition">
+          <option value="user">Kullanıcı</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div id="user-project-field">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Görebileceği Projeler</label>
+        {% if projects %}
+        <div class="border border-slate-200 rounded-lg p-3 max-h-48 overflow-y-auto space-y-1.5">
+          {% for project in projects %}
+          <label class="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" name="project_ids" value="{{ project.id }}" class="user-project-checkbox rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+            {{ project.name }}
+          </label>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-sm text-slate-400 italic">Henüz proje eklenmedi.</p>
+        {% endif %}
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button type="button" onclick="document.getElementById('user-modal').close()"
+                class="text-sm font-medium text-slate-600 hover:bg-slate-100 px-4 py-2 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300">
+          Vazgeç
+        </button>
+        <button id="user-submit-button" type="submit"
+                class="bg-brand-600 text-white text-sm font-medium px-4 py-2 rounded-lg shadow-sm hover:bg-brand-700 transition">
+          Ekle
+        </button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<dialog id="delete-user-modal" class="rounded-2xl border-0 p-0 shadow-xl w-full max-w-sm">
+  <div class="p-6">
+    <div class="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center mb-4">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M8.75 1a.75.75 0 0 0-.75.75V3H4a.75.75 0 0 0 0 1.5h.28l.7 10.48A2.25 2.25 0 0 0 7.22 17h5.56a2.25 2.25 0 0 0 2.24-2.02l.7-10.48H16A.75.75 0 0 0 16 3h-4v-.25a.75.75 0 0 0-.75-.75h-2.5ZM8.5 7.25a.75.75 0 0 1 1.5 0v6.5a.75.75 0 0 1-1.5 0v-6.5Zm3.5 0a.75.75 0 0 1 1.5 0v6.5a.75.75 0 0 1-1.5 0v-6.5Z" clip-rule="evenodd" />
+      </svg>
+    </div>
+    <h2 class="text-lg font-semibold text-slate-900">Kullanıcıyı sil</h2>
+    <p class="text-sm text-slate-600 mt-1.5">
+      <span id="delete-user-modal-name" class="font-medium text-slate-900"></span> kullanıcısını silmek istediğine emin misin?
+      Bu işlem geri alınamaz.
+    </p>
+    <form id="delete-user-modal-form" method="post" class="flex items-center justify-end gap-2 mt-6">
+      <button type="button" onclick="document.getElementById('delete-user-modal').close()"
+              class="text-sm font-medium text-slate-600 hover:bg-slate-100 px-4 py-2 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300">
+        Vazgeç
+      </button>
+      <button type="submit"
+              class="bg-red-600 text-white text-sm font-medium px-4 py-2 rounded-lg shadow-sm hover:bg-red-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300">
+        Evet, sil
+      </button>
+    </form>
+  </div>
+</dialog>
+
+<script>
+  function updateUserFormFields() {
+    const role = document.getElementById("role").value;
+    document.getElementById("user-project-field").classList.toggle("hidden", role === "admin");
+  }
+
+  function openAddUserModal() {
+    const form = document.getElementById("user-form");
+    form.reset();
+    form.action = "/users";
+    document.getElementById("user-modal-title").textContent = "Kullanıcı Ekle";
+    document.getElementById("user-submit-button").textContent = "Ekle";
+    document.getElementById("password-label").textContent = "Şifre";
+    document.getElementById("password").required = true;
+    updateUserFormFields();
+    document.getElementById("user-modal").showModal();
+  }
+
+  function openEditUserModal(button) {
+    const form = document.getElementById("user-form");
+    form.reset();
+    form.action = `/users/${button.dataset.userId}/edit`;
+    document.getElementById("user-modal-title").textContent = "Kullanıcıyı Düzenle";
+    document.getElementById("user-submit-button").textContent = "Kaydet";
+    document.getElementById("password-label").textContent = "Yeni Şifre (opsiyonel)";
+    document.getElementById("password").required = false;
+
+    document.getElementById("full_name").value = button.dataset.fullName || "";
+    document.getElementById("email").value = button.dataset.email || "";
+    document.getElementById("role").value = button.dataset.role || "user";
+
+    const selectedIds = (button.dataset.projectIds || "").split(",").filter(Boolean);
+    document.querySelectorAll(".user-project-checkbox").forEach((checkbox) => {
+      checkbox.checked = selectedIds.includes(checkbox.value);
+    });
+
+    updateUserFormFields();
+    document.getElementById("user-modal").showModal();
+  }
+
+  function openDeleteUserModal(button) {
+    document.getElementById("delete-user-modal-name").textContent = button.dataset.fullName;
+    document.getElementById("delete-user-modal-form").action = `/users/${button.dataset.userId}/delete`;
+    document.getElementById("delete-user-modal").showModal();
+  }
+</script>
+{% endblock %}

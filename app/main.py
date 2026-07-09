@@ -1,10 +1,11 @@
 import json
+import os
 import shutil
 import uuid
 from datetime import datetime, timedelta, timezone
 from math import ceil
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 from urllib.parse import urlencode
 
 import pandas as pd
@@ -14,8 +15,18 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from starlette.status import HTTP_303_SEE_OTHER
 
+from app.auth import (
+    get_allowed_project_ids,
+    get_initials,
+    hash_password,
+    require_admin,
+    seed_default_user,
+    verify_password,
+)
 from app.database import Base, engine, SessionLocal
 from app.health_check import run_health_check as _run_health_check
 from app.lighthouse_check import run_lighthouse_check
@@ -30,6 +41,7 @@ from app.models import (
     ScenarioRun,
     ScenarioStep,
     SeoCheck,
+    User,
 )
 from app.scenario_runner import OPERATOR_LABELS as SCENARIO_OPERATOR_LABELS
 from app.scenario_runner import SCREENSHOT_DIR as SCENARIO_SCREENSHOT_DIR
@@ -53,9 +65,30 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title="CMSPlus")
 
 
+async def _require_login(request: Request, call_next):
+    if request.url.path == "/login" or request.url.path.startswith("/static"):
+        return await call_next(request)
+    if not request.session.get("user_id"):
+        next_path = request.url.path
+        if request.url.query:
+            next_path += f"?{request.url.query}"
+        return RedirectResponse(url=f"/login?next={next_path}", status_code=HTTP_303_SEE_OTHER)
+    return await call_next(request)
+
+
+app.add_middleware(BaseHTTPMiddleware, dispatch=_require_login)
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY", "dev-insecure-secret-change-me"))
+
+
 @app.on_event("startup")
 def _start_scheduler_on_startup() -> None:
     start_scheduler()
+
+
+@app.on_event("startup")
+def _seed_default_user_on_startup() -> None:
+    with SessionLocal() as db:
+        seed_default_user(db)
 
 STATIC_DIR = Path("app/static")
 UPLOAD_DIR = STATIC_DIR / "uploads" / "logos"
@@ -105,24 +138,215 @@ def _delete_logo_file(logo_path: Optional[str]) -> None:
     file_path.unlink(missing_ok=True)
 
 
-def _get_project_or_404(db: Session, project_id: int) -> Project:
+def _check_project_access(db: Session, request: Request, project_id: int) -> None:
+    allowed = get_allowed_project_ids(db, request)
+    if allowed is not None and project_id not in allowed:
+        raise HTTPException(status_code=404, detail="Proje bulunamadı")
+
+
+def _get_project_or_404(db: Session, project_id: int, request: Request) -> Project:
     project = db.get(Project, project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Proje bulunamadı")
+    _check_project_access(db, request, project_id)
     return project
 
 
-def _get_environment_or_404(db: Session, project_id: int, environment_id: int) -> Environment:
+def _get_environment_or_404(db: Session, project_id: int, environment_id: int, request: Request) -> Environment:
     environment = db.get(Environment, environment_id)
     if environment is None or environment.project_id != project_id:
         raise HTTPException(status_code=404, detail="Ortam bulunamadı")
+    _check_project_access(db, request, project_id)
     return environment
+
+
+@app.get("/login")
+def login_form(request: Request, next: str = "/"):
+    if request.session.get("user_id"):
+        return RedirectResponse(url="/", status_code=HTTP_303_SEE_OTHER)
+    return templates.TemplateResponse(request, "login.html", {"next": next, "error": None})
+
+
+@app.post("/login")
+def login_submit(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...),
+    next: str = Form("/"),
+):
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.email == email.strip().lower()))
+    if user is None or not verify_password(password, user.password_hash):
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            {"next": next, "error": "E-posta veya şifre hatalı"},
+            status_code=401,
+        )
+    request.session["user_id"] = user.id
+    request.session["user_email"] = user.email
+    request.session["full_name"] = user.full_name
+    request.session["initials"] = get_initials(user.full_name)
+    request.session["role"] = user.role
+    redirect_to = next if next.startswith("/") and not next.startswith("//") else "/"
+    return RedirectResponse(url=redirect_to, status_code=HTTP_303_SEE_OTHER)
+
+
+@app.post("/logout")
+def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse(url="/login", status_code=HTTP_303_SEE_OTHER)
+
+
+def _admin_count(db: Session) -> int:
+    return db.scalar(select(func.count()).select_from(User).where(User.role == "admin"))
+
+
+def _users_list_context(db: Session) -> dict:
+    users = db.scalars(
+        select(User).options(joinedload(User.projects)).order_by(User.email)
+    ).unique().all()
+    projects = db.scalars(select(Project).order_by(Project.name)).all()
+    return {"users": users, "projects": projects, "admin_count": _admin_count(db)}
+
+
+def _get_user_or_404(db: Session, user_id: int) -> User:
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
+    return user
+
+
+@app.get("/users")
+def users_list(request: Request):
+    require_admin(request)
+    with SessionLocal() as db:
+        return templates.TemplateResponse(
+            request, "users.html", {**_users_list_context(db), "error": None}
+        )
+
+
+@app.post("/users")
+def create_user(
+    request: Request,
+    full_name: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+    role: str = Form(...),
+    project_ids: List[int] = Form([]),
+):
+    require_admin(request)
+    if role not in ("admin", "user"):
+        raise HTTPException(status_code=400, detail="Geçersiz rol")
+    email_normalized = email.strip().lower()
+    with SessionLocal() as db:
+        existing = db.scalar(select(User).where(User.email == email_normalized))
+        if existing is not None:
+            return templates.TemplateResponse(
+                request,
+                "users.html",
+                {**_users_list_context(db), "error": "Bu e-posta zaten kayıtlı"},
+                status_code=400,
+            )
+        user = User(
+            full_name=full_name.strip(),
+            email=email_normalized,
+            password_hash=hash_password(password),
+            role=role,
+        )
+        if role == "user" and project_ids:
+            user.projects = db.scalars(
+                select(Project).where(Project.id.in_(project_ids))
+            ).all()
+        db.add(user)
+        db.commit()
+    return RedirectResponse(url="/users", status_code=HTTP_303_SEE_OTHER)
+
+
+@app.post("/users/{user_id}/edit")
+def edit_user(
+    request: Request,
+    user_id: int,
+    full_name: str = Form(...),
+    email: str = Form(...),
+    password: Optional[str] = Form(None),
+    role: str = Form(...),
+    project_ids: List[int] = Form([]),
+):
+    require_admin(request)
+    if role not in ("admin", "user"):
+        raise HTTPException(status_code=400, detail="Geçersiz rol")
+    email_normalized = email.strip().lower()
+    with SessionLocal() as db:
+        user = _get_user_or_404(db, user_id)
+        existing = db.scalar(
+            select(User).where(User.email == email_normalized, User.id != user_id)
+        )
+        if existing is not None:
+            return templates.TemplateResponse(
+                request,
+                "users.html",
+                {**_users_list_context(db), "error": "Bu e-posta zaten kayıtlı"},
+                status_code=400,
+            )
+        if user.role == "admin" and role != "admin" and _admin_count(db) <= 1:
+            return templates.TemplateResponse(
+                request,
+                "users.html",
+                {**_users_list_context(db), "error": "Son admin kullanıcının rolü değiştirilemez"},
+                status_code=400,
+            )
+        user.full_name = full_name.strip()
+        user.email = email_normalized
+        user.role = role
+        if password:
+            user.password_hash = hash_password(password)
+        user.projects = (
+            db.scalars(select(Project).where(Project.id.in_(project_ids))).all()
+            if role == "user" and project_ids
+            else []
+        )
+        db.commit()
+        if request.session.get("user_id") == user_id:
+            request.session["user_email"] = user.email
+            request.session["full_name"] = user.full_name
+            request.session["initials"] = get_initials(user.full_name)
+            request.session["role"] = user.role
+    return RedirectResponse(url="/users", status_code=HTTP_303_SEE_OTHER)
+
+
+@app.post("/users/{user_id}/delete")
+def delete_user(request: Request, user_id: int):
+    require_admin(request)
+    with SessionLocal() as db:
+        user = _get_user_or_404(db, user_id)
+        if request.session.get("user_id") == user_id:
+            return templates.TemplateResponse(
+                request,
+                "users.html",
+                {**_users_list_context(db), "error": "Kendi hesabını silemezsin"},
+                status_code=400,
+            )
+        if user.role == "admin" and _admin_count(db) <= 1:
+            return templates.TemplateResponse(
+                request,
+                "users.html",
+                {**_users_list_context(db), "error": "Son admin kullanıcı silinemez"},
+                status_code=400,
+            )
+        db.delete(user)
+        db.commit()
+    return RedirectResponse(url="/users", status_code=HTTP_303_SEE_OTHER)
 
 
 @app.get("/")
 def welcome(request: Request):
     with SessionLocal() as db:
-        projects = db.scalars(select(Project).order_by(Project.name)).all()
+        allowed_project_ids = get_allowed_project_ids(db, request)
+        query = select(Project).order_by(Project.name)
+        if allowed_project_ids is not None:
+            query = query.where(Project.id.in_(allowed_project_ids))
+        projects = db.scalars(query).all()
         return templates.TemplateResponse(
             request, "welcome.html", {"projects": projects}
         )
@@ -130,11 +354,13 @@ def welcome(request: Request):
 
 @app.get("/projects/new")
 def new_project_form(request: Request):
+    require_admin(request)
     return templates.TemplateResponse(request, "project_form.html", {"project": None})
 
 
 @app.post("/projects")
 def create_project(
+    request: Request,
     name: str = Form(...),
     env_name: str = Form(...),
     env_url: str = Form(...),
@@ -142,6 +368,7 @@ def create_project(
     notes: Optional[str] = Form(None),
     logo: Optional[UploadFile] = File(None),
 ):
+    require_admin(request)
     logo_path = _save_logo(logo)
     with SessionLocal() as db:
         project = Project(
@@ -166,7 +393,7 @@ def create_project(
 @app.get("/projects/{project_id}")
 def project_detail(project_id: int, request: Request):
     with SessionLocal() as db:
-        project = _get_project_or_404(db, project_id)
+        project = _get_project_or_404(db, project_id, request)
         return templates.TemplateResponse(
             request, "project_detail.html", {"project": project}
         )
@@ -174,8 +401,9 @@ def project_detail(project_id: int, request: Request):
 
 @app.get("/projects/{project_id}/edit")
 def edit_project_form(project_id: int, request: Request):
+    require_admin(request)
     with SessionLocal() as db:
-        project = _get_project_or_404(db, project_id)
+        project = _get_project_or_404(db, project_id, request)
         return templates.TemplateResponse(
             request, "project_form.html", {"project": project}
         )
@@ -184,12 +412,14 @@ def edit_project_form(project_id: int, request: Request):
 @app.post("/projects/{project_id}/edit")
 def update_project(
     project_id: int,
+    request: Request,
     name: str = Form(...),
     notes: Optional[str] = Form(None),
     logo: Optional[UploadFile] = File(None),
 ):
+    require_admin(request)
     with SessionLocal() as db:
-        project = _get_project_or_404(db, project_id)
+        project = _get_project_or_404(db, project_id, request)
         new_logo_path = _save_logo(logo)
         if new_logo_path:
             _delete_logo_file(project.logo_path)
@@ -202,9 +432,10 @@ def update_project(
 
 
 @app.post("/projects/{project_id}/delete")
-def delete_project(project_id: int):
+def delete_project(project_id: int, request: Request):
+    require_admin(request)
     with SessionLocal() as db:
-        project = _get_project_or_404(db, project_id)
+        project = _get_project_or_404(db, project_id, request)
         _delete_logo_file(project.logo_path)
         db.delete(project)
         db.commit()
@@ -213,8 +444,9 @@ def delete_project(project_id: int):
 
 @app.get("/projects/{project_id}/environments/new")
 def new_environment_form(project_id: int, request: Request):
+    require_admin(request)
     with SessionLocal() as db:
-        project = _get_project_or_404(db, project_id)
+        project = _get_project_or_404(db, project_id, request)
         return templates.TemplateResponse(
             request, "environment_form.html", {"project": project, "environment": None}
         )
@@ -223,8 +455,8 @@ def new_environment_form(project_id: int, request: Request):
 @app.get("/projects/{project_id}/environments/{environment_id}")
 def environment_detail(project_id: int, environment_id: int, request: Request):
     with SessionLocal() as db:
-        project = _get_project_or_404(db, project_id)
-        environment = _get_environment_or_404(db, project_id, environment_id)
+        project = _get_project_or_404(db, project_id, request)
+        environment = _get_environment_or_404(db, project_id, environment_id, request)
         cron_jobs_with_next_run = [
             (cron_job, get_next_run_time(cron_job.id)) for cron_job in environment.cron_jobs
         ]
@@ -244,12 +476,14 @@ def environment_detail(project_id: int, environment_id: int, request: Request):
 @app.post("/projects/{project_id}/environments")
 def create_environment(
     project_id: int,
+    request: Request,
     name: str = Form(...),
     url: str = Form(...),
     drupal_version: Optional[str] = Form(None),
 ):
+    require_admin(request)
     with SessionLocal() as db:
-        project = _get_project_or_404(db, project_id)
+        project = _get_project_or_404(db, project_id, request)
         is_first = len(project.environments) == 0
         environment = Environment(
             project_id=project.id,
@@ -265,9 +499,10 @@ def create_environment(
 
 @app.get("/projects/{project_id}/environments/{environment_id}/edit")
 def edit_environment_form(project_id: int, environment_id: int, request: Request):
+    require_admin(request)
     with SessionLocal() as db:
-        project = _get_project_or_404(db, project_id)
-        environment = _get_environment_or_404(db, project_id, environment_id)
+        project = _get_project_or_404(db, project_id, request)
+        environment = _get_environment_or_404(db, project_id, environment_id, request)
         return templates.TemplateResponse(
             request,
             "environment_form.html",
@@ -279,12 +514,14 @@ def edit_environment_form(project_id: int, environment_id: int, request: Request
 def update_environment(
     project_id: int,
     environment_id: int,
+    request: Request,
     name: str = Form(...),
     url: str = Form(...),
     drupal_version: Optional[str] = Form(None),
 ):
+    require_admin(request)
     with SessionLocal() as db:
-        environment = _get_environment_or_404(db, project_id, environment_id)
+        environment = _get_environment_or_404(db, project_id, environment_id, request)
         environment.name = name.strip()
         environment.url = url.strip()
         environment.drupal_version = (drupal_version or "").strip() or None
@@ -293,9 +530,10 @@ def update_environment(
 
 
 @app.post("/projects/{project_id}/environments/{environment_id}/delete")
-def delete_environment(project_id: int, environment_id: int):
+def delete_environment(project_id: int, environment_id: int, request: Request):
+    require_admin(request)
     with SessionLocal() as db:
-        environment = _get_environment_or_404(db, project_id, environment_id)
+        environment = _get_environment_or_404(db, project_id, environment_id, request)
         was_primary = environment.is_primary
         db.delete(environment)
         db.flush()
@@ -313,46 +551,46 @@ def delete_environment(project_id: int, environment_id: int):
 
 
 @app.post("/projects/{project_id}/environments/{environment_id}/check")
-def check_environment(project_id: int, environment_id: int):
+def check_environment(project_id: int, environment_id: int, request: Request):
     with SessionLocal() as db:
-        environment = _get_environment_or_404(db, project_id, environment_id)
+        environment = _get_environment_or_404(db, project_id, environment_id, request)
         _run_health_check(environment)
         db.commit()
     return RedirectResponse(url=f"/projects/{project_id}", status_code=HTTP_303_SEE_OTHER)
 
 
 @app.post("/projects/{project_id}/environments/{environment_id}/ssl-check")
-def check_environment_ssl(project_id: int, environment_id: int):
+def check_environment_ssl(project_id: int, environment_id: int, request: Request):
     with SessionLocal() as db:
-        environment = _get_environment_or_404(db, project_id, environment_id)
+        environment = _get_environment_or_404(db, project_id, environment_id, request)
         _run_ssl_check(environment)
         db.commit()
     return RedirectResponse(url=f"/projects/{project_id}", status_code=HTTP_303_SEE_OTHER)
 
 
 @app.post("/projects/{project_id}/environments/{environment_id}/seo-check")
-def check_environment_seo(project_id: int, environment_id: int):
+def check_environment_seo(project_id: int, environment_id: int, request: Request):
     with SessionLocal() as db:
-        environment = _get_environment_or_404(db, project_id, environment_id)
+        environment = _get_environment_or_404(db, project_id, environment_id, request)
         run_seo_check(environment)
         db.commit()
     return RedirectResponse(url=f"/projects/{project_id}", status_code=HTTP_303_SEE_OTHER)
 
 
 @app.post("/projects/{project_id}/environments/{environment_id}/lighthouse-check")
-def check_environment_lighthouse(project_id: int, environment_id: int):
+def check_environment_lighthouse(project_id: int, environment_id: int, request: Request):
     with SessionLocal() as db:
-        environment = _get_environment_or_404(db, project_id, environment_id)
+        environment = _get_environment_or_404(db, project_id, environment_id, request)
         run_lighthouse_check(environment)
         db.commit()
     return RedirectResponse(url=f"/projects/{project_id}", status_code=HTTP_303_SEE_OTHER)
 
 
 @app.post("/projects/{project_id}/environments/{environment_id}/set-primary")
-def set_primary_environment(project_id: int, environment_id: int):
+def set_primary_environment(project_id: int, environment_id: int, request: Request):
     with SessionLocal() as db:
-        project = _get_project_or_404(db, project_id)
-        target = _get_environment_or_404(db, project_id, environment_id)
+        project = _get_project_or_404(db, project_id, request)
+        target = _get_environment_or_404(db, project_id, environment_id, request)
         for environment in project.environments:
             environment.is_primary = environment.id == target.id
         db.commit()
@@ -370,6 +608,7 @@ def _get_cron_job_or_404(db: Session, environment_id: int, cron_job_id: int) -> 
 def create_cron_job(
     project_id: int,
     environment_id: int,
+    request: Request,
     check_type: str = Form(...),
     frequency: str = Form(...),
     notify_enabled: Optional[str] = Form(None),
@@ -385,7 +624,7 @@ def create_cron_job(
     if check_type not in CHECK_TYPE_LABELS or frequency not in FREQUENCY_LABELS:
         raise HTTPException(status_code=400, detail="Geçersiz kontrol türü veya sıklık")
     with SessionLocal() as db:
-        _get_environment_or_404(db, project_id, environment_id)
+        _get_environment_or_404(db, project_id, environment_id, request)
         if check_type == "scenario":
             scenario = db.get(Scenario, scenario_id)
             if scenario is None or scenario.environment_id != environment_id:
@@ -423,11 +662,12 @@ def update_cron_job_notifications(
     project_id: int,
     environment_id: int,
     cron_job_id: int,
+    request: Request,
     notify_enabled: Optional[str] = Form(None),
     notify_emails: Optional[str] = Form(None),
 ):
     with SessionLocal() as db:
-        _get_environment_or_404(db, project_id, environment_id)
+        _get_environment_or_404(db, project_id, environment_id, request)
         cron_job = _get_cron_job_or_404(db, environment_id, cron_job_id)
         cron_job.notify_enabled = bool(notify_enabled)
         cron_job.notify_emails = (notify_emails or "").strip() or None
@@ -438,9 +678,9 @@ def update_cron_job_notifications(
 
 
 @app.post("/projects/{project_id}/environments/{environment_id}/cron-jobs/{cron_job_id}/toggle")
-def toggle_cron_job(project_id: int, environment_id: int, cron_job_id: int):
+def toggle_cron_job(project_id: int, environment_id: int, cron_job_id: int, request: Request):
     with SessionLocal() as db:
-        _get_environment_or_404(db, project_id, environment_id)
+        _get_environment_or_404(db, project_id, environment_id, request)
         cron_job = _get_cron_job_or_404(db, environment_id, cron_job_id)
         cron_job.is_active = not cron_job.is_active
         db.commit()
@@ -454,9 +694,9 @@ def toggle_cron_job(project_id: int, environment_id: int, cron_job_id: int):
 
 
 @app.post("/projects/{project_id}/environments/{environment_id}/cron-jobs/{cron_job_id}/delete")
-def delete_cron_job(project_id: int, environment_id: int, cron_job_id: int):
+def delete_cron_job(project_id: int, environment_id: int, cron_job_id: int, request: Request):
     with SessionLocal() as db:
-        _get_environment_or_404(db, project_id, environment_id)
+        _get_environment_or_404(db, project_id, environment_id, request)
         cron_job = _get_cron_job_or_404(db, environment_id, cron_job_id)
         cron_job_id_value = cron_job.id
         db.delete(cron_job)
@@ -467,10 +707,11 @@ def delete_cron_job(project_id: int, environment_id: int, cron_job_id: int):
     )
 
 
-def _get_health_check_or_404(db: Session, check_id: int) -> HealthCheck:
+def _get_health_check_or_404(db: Session, check_id: int, request: Request) -> HealthCheck:
     check = db.get(HealthCheck, check_id)
     if check is None:
         raise HTTPException(status_code=404, detail="Kontrol kaydı bulunamadı")
+    _check_project_access(db, request, check.environment.project_id)
     return check
 
 
@@ -525,13 +766,20 @@ def health_checks_list(
             cutoff = datetime.now(timezone.utc) - HEALTH_CHECK_TIME_PRESETS[since]
             query = query.where(HealthCheck.checked_at >= cutoff)
 
+        allowed_project_ids = get_allowed_project_ids(db, request)
+        if allowed_project_ids is not None:
+            query = query.where(HealthCheck.environment.has(Environment.project_id.in_(allowed_project_ids)))
+
         checks = db.scalars(query.limit(200)).all()
 
         filtered_environment = None
         if environment_id is not None:
             filtered_environment = db.get(Environment, environment_id)
 
-        projects = db.scalars(select(Project).order_by(Project.name)).all()
+        projects_query = select(Project).order_by(Project.name)
+        if allowed_project_ids is not None:
+            projects_query = projects_query.where(Project.id.in_(allowed_project_ids))
+        projects = db.scalars(projects_query).all()
 
         non_environment_params = {
             key: value
@@ -560,7 +808,7 @@ def health_checks_list(
 @app.get("/health-checks/{check_id}")
 def health_check_detail(check_id: int, request: Request):
     with SessionLocal() as db:
-        check = _get_health_check_or_404(db, check_id)
+        check = _get_health_check_or_404(db, check_id, request)
         return templates.TemplateResponse(
             request,
             "health_check_detail.html",
@@ -569,16 +817,17 @@ def health_check_detail(check_id: int, request: Request):
 
 
 @app.get("/health-checks/{check_id}/json")
-def health_check_json(check_id: int):
+def health_check_json(check_id: int, request: Request):
     with SessionLocal() as db:
-        check = _get_health_check_or_404(db, check_id)
+        check = _get_health_check_or_404(db, check_id, request)
         return JSONResponse(_health_check_to_dict(check))
 
 
-def _get_seo_check_or_404(db: Session, check_id: int) -> SeoCheck:
+def _get_seo_check_or_404(db: Session, check_id: int, request: Request) -> SeoCheck:
     check = db.get(SeoCheck, check_id)
     if check is None:
         raise HTTPException(status_code=404, detail="SEO kontrol kaydı bulunamadı")
+    _check_project_access(db, request, check.environment.project_id)
     return check
 
 
@@ -719,13 +968,20 @@ def seo_checks_list(
             cutoff = datetime.now(timezone.utc) - HEALTH_CHECK_TIME_PRESETS[since]
             query = query.where(SeoCheck.checked_at >= cutoff)
 
+        allowed_project_ids = get_allowed_project_ids(db, request)
+        if allowed_project_ids is not None:
+            query = query.where(SeoCheck.environment.has(Environment.project_id.in_(allowed_project_ids)))
+
         checks = db.scalars(query.limit(500)).all()
 
         filtered_environment = None
         if environment_id is not None:
             filtered_environment = db.get(Environment, environment_id)
 
-        projects = db.scalars(select(Project).order_by(Project.name)).all()
+        projects_query = select(Project).order_by(Project.name)
+        if allowed_project_ids is not None:
+            projects_query = projects_query.where(Project.id.in_(allowed_project_ids))
+        projects = db.scalars(projects_query).all()
 
         non_environment_params = {
             key: value
@@ -757,7 +1013,7 @@ def seo_checks_list(
 @app.get("/seo-checks/{check_id}")
 def seo_check_detail(check_id: int, request: Request):
     with SessionLocal() as db:
-        check = _get_seo_check_or_404(db, check_id)
+        check = _get_seo_check_or_404(db, check_id, request)
         return templates.TemplateResponse(
             request,
             "seo_check_detail.html",
@@ -770,16 +1026,17 @@ def seo_check_detail(check_id: int, request: Request):
 
 
 @app.get("/seo-checks/{check_id}/json")
-def seo_check_json(check_id: int):
+def seo_check_json(check_id: int, request: Request):
     with SessionLocal() as db:
-        check = _get_seo_check_or_404(db, check_id)
+        check = _get_seo_check_or_404(db, check_id, request)
         return JSONResponse(_seo_check_to_dict(check))
 
 
-def _get_lighthouse_check_or_404(db: Session, check_id: int) -> LighthouseCheck:
+def _get_lighthouse_check_or_404(db: Session, check_id: int, request: Request) -> LighthouseCheck:
     check = db.get(LighthouseCheck, check_id)
     if check is None:
         raise HTTPException(status_code=404, detail="Lighthouse kontrol kaydı bulunamadı")
+    _check_project_access(db, request, check.environment.project_id)
     return check
 
 
@@ -932,13 +1189,22 @@ def lighthouse_checks_list(
             cutoff = datetime.now(timezone.utc) - HEALTH_CHECK_TIME_PRESETS[since]
             query = query.where(LighthouseCheck.checked_at >= cutoff)
 
+        allowed_project_ids = get_allowed_project_ids(db, request)
+        if allowed_project_ids is not None:
+            query = query.where(
+                LighthouseCheck.environment.has(Environment.project_id.in_(allowed_project_ids))
+            )
+
         checks = db.scalars(query.limit(500)).all()
 
         filtered_environment = None
         if environment_id is not None:
             filtered_environment = db.get(Environment, environment_id)
 
-        projects = db.scalars(select(Project).order_by(Project.name)).all()
+        projects_query = select(Project).order_by(Project.name)
+        if allowed_project_ids is not None:
+            projects_query = projects_query.where(Project.id.in_(allowed_project_ids))
+        projects = db.scalars(projects_query).all()
 
         non_environment_params = {
             key: value
@@ -970,7 +1236,7 @@ def lighthouse_checks_list(
 @app.get("/lighthouse-checks/{check_id}")
 def lighthouse_check_detail(check_id: int, request: Request):
     with SessionLocal() as db:
-        check = _get_lighthouse_check_or_404(db, check_id)
+        check = _get_lighthouse_check_or_404(db, check_id, request)
         return templates.TemplateResponse(
             request,
             "lighthouse_check_detail.html",
@@ -983,16 +1249,16 @@ def lighthouse_check_detail(check_id: int, request: Request):
 
 
 @app.get("/lighthouse-checks/{check_id}/json")
-def lighthouse_check_json(check_id: int):
+def lighthouse_check_json(check_id: int, request: Request):
     with SessionLocal() as db:
-        check = _get_lighthouse_check_or_404(db, check_id)
+        check = _get_lighthouse_check_or_404(db, check_id, request)
         return JSONResponse(_lighthouse_check_to_dict(check))
 
 
 @app.get("/projects/{project_id}/compare")
 def compare_list(project_id: int, request: Request):
     with SessionLocal() as db:
-        project = _get_project_or_404(db, project_id)
+        project = _get_project_or_404(db, project_id, request)
         comparisons = db.scalars(
             select(EnvironmentComparison)
             .where(EnvironmentComparison.project_id == project_id)
@@ -1006,7 +1272,7 @@ def compare_list(project_id: int, request: Request):
 @app.get("/projects/{project_id}/compare/new")
 def new_comparison_form(project_id: int, request: Request):
     with SessionLocal() as db:
-        project = _get_project_or_404(db, project_id)
+        project = _get_project_or_404(db, project_id, request)
         if len(project.environments) < 2:
             raise HTTPException(status_code=400, detail="Karşılaştırma için en az 2 ortam gerekli")
         return templates.TemplateResponse(request, "compare_form.html", {"project": project})
@@ -1015,6 +1281,7 @@ def new_comparison_form(project_id: int, request: Request):
 @app.post("/projects/{project_id}/compare")
 def create_comparison(
     project_id: int,
+    request: Request,
     environment_a_id: int = Form(...),
     environment_b_id: int = Form(...),
     paths: str = Form(...),
@@ -1026,9 +1293,9 @@ def create_comparison(
         raise HTTPException(status_code=400, detail="En az bir sayfa yolu girmelisin")
 
     with SessionLocal() as db:
-        _get_project_or_404(db, project_id)
-        _get_environment_or_404(db, project_id, environment_a_id)
-        _get_environment_or_404(db, project_id, environment_b_id)
+        _get_project_or_404(db, project_id, request)
+        _get_environment_or_404(db, project_id, environment_a_id, request)
+        _get_environment_or_404(db, project_id, environment_b_id, request)
 
         comparison = EnvironmentComparison(
             project_id=project_id,
@@ -1051,7 +1318,7 @@ def create_comparison(
 @app.get("/projects/{project_id}/compare/{comparison_id}")
 def comparison_detail(project_id: int, comparison_id: int, request: Request):
     with SessionLocal() as db:
-        project = _get_project_or_404(db, project_id)
+        project = _get_project_or_404(db, project_id, request)
         comparison = db.get(EnvironmentComparison, comparison_id)
         if comparison is None or comparison.project_id != project_id:
             raise HTTPException(status_code=404, detail="Karşılaştırma bulunamadı")
@@ -1061,8 +1328,9 @@ def comparison_detail(project_id: int, comparison_id: int, request: Request):
 
 
 @app.post("/projects/{project_id}/compare/{comparison_id}/delete")
-def delete_comparison(project_id: int, comparison_id: int):
+def delete_comparison(project_id: int, comparison_id: int, request: Request):
     with SessionLocal() as db:
+        _get_project_or_404(db, project_id, request)
         comparison = db.get(EnvironmentComparison, comparison_id)
         if comparison is None or comparison.project_id != project_id:
             raise HTTPException(status_code=404, detail="Karşılaştırma bulunamadı")
@@ -1106,9 +1374,9 @@ def _parse_optional_int(value: Optional[str]) -> Optional[int]:
 
 
 @app.post("/projects/{project_id}/environments/{environment_id}/scenarios")
-def create_scenario(project_id: int, environment_id: int, name: str = Form(...)):
+def create_scenario(project_id: int, environment_id: int, request: Request, name: str = Form(...)):
     with SessionLocal() as db:
-        _get_environment_or_404(db, project_id, environment_id)
+        _get_environment_or_404(db, project_id, environment_id, request)
         scenario = Scenario(environment_id=environment_id, name=name.strip())
         db.add(scenario)
         db.commit()
@@ -1132,8 +1400,8 @@ def scenario_detail(
     page: int = 1,
 ):
     with SessionLocal() as db:
-        project = _get_project_or_404(db, project_id)
-        environment = _get_environment_or_404(db, project_id, environment_id)
+        project = _get_project_or_404(db, project_id, request)
+        environment = _get_environment_or_404(db, project_id, environment_id, request)
         scenario = _get_scenario_or_404(db, environment_id, scenario_id)
         steps_with_description = [(step, describe_step(step)) for step in scenario.steps]
 
@@ -1175,6 +1443,7 @@ def add_scenario_step(
     project_id: int,
     environment_id: int,
     scenario_id: int,
+    request: Request,
     step_type: str = Form(...),
     path: Optional[str] = Form(None),
     selector: Optional[str] = Form(None),
@@ -1187,6 +1456,7 @@ def add_scenario_step(
     if step_type not in SCENARIO_STEP_TYPE_LABELS:
         raise HTTPException(status_code=400, detail="Geçersiz adım türü")
     with SessionLocal() as db:
+        _get_environment_or_404(db, project_id, environment_id, request)
         scenario = _get_scenario_or_404(db, environment_id, scenario_id)
         next_position = max((step.position for step in scenario.steps), default=-1) + 1
         step = ScenarioStep(
@@ -1212,8 +1482,9 @@ def add_scenario_step(
 @app.post(
     "/projects/{project_id}/environments/{environment_id}/scenarios/{scenario_id}/steps/{step_id}/delete"
 )
-def delete_scenario_step(project_id: int, environment_id: int, scenario_id: int, step_id: int):
+def delete_scenario_step(project_id: int, environment_id: int, scenario_id: int, step_id: int, request: Request):
     with SessionLocal() as db:
+        _get_environment_or_404(db, project_id, environment_id, request)
         _get_scenario_or_404(db, environment_id, scenario_id)
         step = _get_scenario_step_or_404(db, scenario_id, step_id)
         db.delete(step)
@@ -1232,6 +1503,7 @@ def edit_scenario_step(
     environment_id: int,
     scenario_id: int,
     step_id: int,
+    request: Request,
     step_type: str = Form(...),
     path: Optional[str] = Form(None),
     selector: Optional[str] = Form(None),
@@ -1244,6 +1516,7 @@ def edit_scenario_step(
     if step_type not in SCENARIO_STEP_TYPE_LABELS:
         raise HTTPException(status_code=400, detail="Geçersiz adım türü")
     with SessionLocal() as db:
+        _get_environment_or_404(db, project_id, environment_id, request)
         _get_scenario_or_404(db, environment_id, scenario_id)
         step = _get_scenario_step_or_404(db, scenario_id, step_id)
         step.step_type = step_type
@@ -1269,9 +1542,11 @@ def move_scenario_step(
     environment_id: int,
     scenario_id: int,
     step_id: int,
+    request: Request,
     direction: str = Form(...),
 ):
     with SessionLocal() as db:
+        _get_environment_or_404(db, project_id, environment_id, request)
         scenario = _get_scenario_or_404(db, environment_id, scenario_id)
         step = _get_scenario_step_or_404(db, scenario_id, step_id)
         steps = scenario.steps
@@ -1292,8 +1567,9 @@ def move_scenario_step(
 
 
 @app.post("/projects/{project_id}/environments/{environment_id}/scenarios/{scenario_id}/run")
-def run_scenario_route(project_id: int, environment_id: int, scenario_id: int):
+def run_scenario_route(project_id: int, environment_id: int, scenario_id: int, request: Request):
     with SessionLocal() as db:
+        _get_environment_or_404(db, project_id, environment_id, request)
         scenario = _get_scenario_or_404(db, environment_id, scenario_id)
         if not scenario.steps:
             raise HTTPException(status_code=400, detail="Senaryoda hiç adım yok")
@@ -1314,8 +1590,8 @@ def scenario_run_detail(
     project_id: int, environment_id: int, scenario_id: int, run_id: int, request: Request
 ):
     with SessionLocal() as db:
-        project = _get_project_or_404(db, project_id)
-        environment = _get_environment_or_404(db, project_id, environment_id)
+        project = _get_project_or_404(db, project_id, request)
+        environment = _get_environment_or_404(db, project_id, environment_id, request)
         scenario = _get_scenario_or_404(db, environment_id, scenario_id)
         run = _get_scenario_run_or_404(db, scenario_id, run_id)
         return templates.TemplateResponse(
@@ -1326,8 +1602,9 @@ def scenario_run_detail(
 
 
 @app.post("/projects/{project_id}/environments/{environment_id}/scenarios/{scenario_id}/delete")
-def delete_scenario(project_id: int, environment_id: int, scenario_id: int):
+def delete_scenario(project_id: int, environment_id: int, scenario_id: int, request: Request):
     with SessionLocal() as db:
+        _get_environment_or_404(db, project_id, environment_id, request)
         scenario = _get_scenario_or_404(db, environment_id, scenario_id)
         db.delete(scenario)
         db.commit()

@@ -51,6 +51,7 @@
         </button>
       </form>
       {% endif %}
+      {% if request.session.get('role') == 'admin' %}
       <a href="/projects/{{ project.id }}/environments/{{ environment.id }}/edit"
          class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-100 px-3 py-2 rounded-lg transition">
         <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
@@ -67,6 +68,7 @@
         </svg>
         Sil
       </button>
+      {% endif %}
     </div>
   </div>
 

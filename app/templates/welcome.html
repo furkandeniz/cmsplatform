@@ -8,6 +8,7 @@
     <h1 class="text-2xl font-bold text-slate-900">Projeler</h1>
     <p class="text-slate-500 text-sm mt-1">Yönettiğiniz Drupal projelerinin listesi</p>
   </div>
+  {% if request.session.get('role') == 'admin' %}
   <a href="/projects/new"
      class="inline-flex items-center gap-1.5 bg-brand-600 text-white text-sm font-medium px-4 py-2.5 rounded-lg shadow-sm hover:bg-brand-700 hover:shadow transition">
     <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
@@ -15,6 +16,7 @@
     </svg>
     Yeni Proje Ekle
   </a>
+  {% endif %}
 </div>
 
 {% if projects %}
@@ -66,6 +68,7 @@
       </div>
     </div>
 
+    {% if request.session.get('role') == 'admin' %}
     <div class="relative z-10 flex items-center justify-end gap-1 mt-4 pt-3 border-t border-slate-100">
       <a href="/projects/{{ project.id }}/edit"
          class="pointer-events-auto inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-100 px-2.5 py-1.5 rounded-lg transition">
@@ -84,6 +87,7 @@
         Sil
       </button>
     </div>
+    {% endif %}
   </div>
   {% endfor %}
 </div>
@@ -95,9 +99,11 @@
     </svg>
   </div>
   <p class="text-slate-500">Henüz proje eklenmedi.</p>
+  {% if request.session.get('role') == 'admin' %}
   <a href="/projects/new" class="inline-flex items-center gap-1.5 mt-4 text-sm font-medium text-brand-600 hover:text-brand-700">
     İlk projeni ekle →
   </a>
+  {% endif %}
 </div>
 {% endif %}
 
