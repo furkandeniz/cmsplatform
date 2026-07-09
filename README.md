@@ -1,8 +1,10 @@
 # CMSPlus
 
-Drupal projelerini tek yerden yönetmek için izleme/test platformu: proje ve ortam (Production/Staging/...)
-yönetimi, otomatik sağlık/SSL/SEO/Lighthouse kontrolleri, ortamlar arası görsel karşılaştırma, kural tabanlı
-Playwright senaryoları ve zamanlanmış cron job'lar üzerinden e-posta uyarıları.
+Herhangi bir web sitesini/projeyi (Drupal, WordPress, özel geliştirme fark etmeksizin) tek yerden izlemek ve test
+etmek için platform: proje ve ortam (Production/Staging/...) yönetimi, otomatik sağlık/SSL/SEO/Lighthouse
+kontrolleri, ortamlar arası görsel karşılaştırma, kural tabanlı Playwright senaryoları ve zamanlanmış cron job'lar
+üzerinden e-posta uyarıları. Tüm kontroller URL üzerinden çalışır; belirli bir CMS veya teknolojiye bağımlılık
+yoktur.
 
 ## Özellikler
 
@@ -101,8 +103,9 @@ lighthouse/
 
 ## Veri modeli
 
-Her proje (`Project`) bir veya daha fazla ortama (`Environment`) sahiptir. URL ve Drupal sürümü bilgisi ortam
-seviyesinde tutulur; her ortamın son sağlık/SSL/SEO/Lighthouse kontrol sonucu, hızlı erişim için doğrudan
+Her proje (`Project`) bir veya daha fazla ortama (`Environment`) sahiptir. URL bilgisi ve isteğe bağlı bir
+CMS/sürüm notu (`drupal_version` alanı — Drupal projeleri için düşünülmüş olsa da boş bırakılabilir, herhangi bir
+site için zorunlu değildir) ortam seviyesinde tutulur; her ortamın son sağlık/SSL/SEO/Lighthouse kontrol sonucu, hızlı erişim için doğrudan
 `Environment` satırında da önbelleklenir (`last_check_ok`, `ssl_days_remaining`, `last_seo_score` vb.), ayrıca
 tam geçmiş ayrı tablolarda (`HealthCheck`, `SeoCheck`, `LighthouseCheck`) tutulur.
 
