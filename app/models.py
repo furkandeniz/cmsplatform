@@ -97,6 +97,16 @@ class Environment(Base):
     last_lighthouse_seo: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     last_lighthouse_error: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
+    cache_warm_sitemap_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    cache_warm_axes_yaml: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    last_cache_warm_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_cache_warm_ok: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    last_cache_warm_error: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    last_cache_warm_total: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    last_cache_warm_success: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    last_cache_warm_failed: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    last_cache_warm_hit_ratio: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
     project: Mapped["Project"] = relationship(back_populates="environments")
     health_checks: Mapped[List["HealthCheck"]] = relationship(
         back_populates="environment",
@@ -112,6 +122,11 @@ class Environment(Base):
         back_populates="environment",
         cascade="all, delete-orphan",
         order_by="desc(LighthouseCheck.checked_at)",
+    )
+    cache_warm_checks: Mapped[List["CacheWarmCheck"]] = relationship(
+        back_populates="environment",
+        cascade="all, delete-orphan",
+        order_by="desc(CacheWarmCheck.checked_at)",
     )
     cron_jobs: Mapped[List["CronJob"]] = relationship(
         back_populates="environment",
@@ -207,6 +222,35 @@ class LighthouseCheck(Base):
     audits: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     environment: Mapped["Environment"] = relationship(back_populates="lighthouse_checks")
+
+
+class CacheWarmCheck(Base):
+    __tablename__ = "cache_warm_checks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    environment_id: Mapped[int] = mapped_column(
+        ForeignKey("environments.id", ondelete="CASCADE"), nullable=False
+    )
+    checked_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    ok: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    error: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    duration_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    url_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    total_jobs: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    success: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    failed: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    cache_hits: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    cache_misses: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    cache_bypass: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    unknown_cache_state: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    hit_ratio: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    summary_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    environment: Mapped["Environment"] = relationship(back_populates="cache_warm_checks")
 
 
 class CronJob(Base):

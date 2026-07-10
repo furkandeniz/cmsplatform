@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .env
 lighthouse/node_modules/
+cache_warmer/bin/
 app/static/uploads/
 backups/*
 !backups/.gitkeep

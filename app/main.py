@@ -27,10 +27,12 @@ from app.auth import (
     seed_default_user,
     verify_password,
 )
+from app.cache_warm_check import run_cache_warm_check
 from app.database import Base, engine, SessionLocal
 from app.health_check import run_health_check as _run_health_check
 from app.lighthouse_check import run_lighthouse_check
 from app.models import (
+    CacheWarmCheck,
     CronJob,
     Environment,
     EnvironmentComparison,
@@ -518,6 +520,8 @@ def update_environment(
     name: str = Form(...),
     url: str = Form(...),
     drupal_version: Optional[str] = Form(None),
+    cache_warm_sitemap_url: Optional[str] = Form(None),
+    cache_warm_axes_yaml: Optional[str] = Form(None),
 ):
     require_admin(request)
     with SessionLocal() as db:
@@ -525,6 +529,8 @@ def update_environment(
         environment.name = name.strip()
         environment.url = url.strip()
         environment.drupal_version = (drupal_version or "").strip() or None
+        environment.cache_warm_sitemap_url = (cache_warm_sitemap_url or "").strip() or None
+        environment.cache_warm_axes_yaml = (cache_warm_axes_yaml or "").strip() or None
         db.commit()
     return RedirectResponse(url=f"/projects/{project_id}", status_code=HTTP_303_SEE_OTHER)
 
@@ -582,6 +588,15 @@ def check_environment_lighthouse(project_id: int, environment_id: int, request: 
     with SessionLocal() as db:
         environment = _get_environment_or_404(db, project_id, environment_id, request)
         run_lighthouse_check(environment)
+        db.commit()
+    return RedirectResponse(url=f"/projects/{project_id}", status_code=HTTP_303_SEE_OTHER)
+
+
+@app.post("/projects/{project_id}/environments/{environment_id}/cache-warm-check")
+def check_environment_cache_warm(project_id: int, environment_id: int, request: Request):
+    with SessionLocal() as db:
+        environment = _get_environment_or_404(db, project_id, environment_id, request)
+        run_cache_warm_check(environment)
         db.commit()
     return RedirectResponse(url=f"/projects/{project_id}", status_code=HTTP_303_SEE_OTHER)
 
@@ -1253,6 +1268,127 @@ def lighthouse_check_json(check_id: int, request: Request):
     with SessionLocal() as db:
         check = _get_lighthouse_check_or_404(db, check_id, request)
         return JSONResponse(_lighthouse_check_to_dict(check))
+
+
+def _get_cache_warm_check_or_404(db: Session, check_id: int, request: Request) -> CacheWarmCheck:
+    check = db.get(CacheWarmCheck, check_id)
+    if check is None:
+        raise HTTPException(status_code=404, detail="Cache ısıtma kaydı bulunamadı")
+    _check_project_access(db, request, check.environment.project_id)
+    return check
+
+
+def _cache_warm_check_to_dict(check: CacheWarmCheck) -> dict:
+    return {
+        "id": check.id,
+        "project": check.environment.project.name,
+        "environment": check.environment.name,
+        "url": check.environment.url,
+        "checked_at": check.checked_at.isoformat(),
+        "ok": check.ok,
+        "error": check.error,
+        "duration_ms": check.duration_ms,
+        "url_count": check.url_count,
+        "total_jobs": check.total_jobs,
+        "success": check.success,
+        "failed": check.failed,
+        "cache_hits": check.cache_hits,
+        "cache_misses": check.cache_misses,
+        "cache_bypass": check.cache_bypass,
+        "unknown_cache_state": check.unknown_cache_state,
+        "hit_ratio": check.hit_ratio,
+        "summary": json.loads(check.summary_json) if check.summary_json else None,
+    }
+
+
+@app.get("/cache-warm-checks")
+def cache_warm_checks_list(
+    request: Request,
+    environment_id: Optional[int] = None,
+    project_id: Optional[int] = None,
+    status: Optional[str] = None,
+    since: Optional[str] = None,
+):
+    with SessionLocal() as db:
+        query = (
+            select(CacheWarmCheck)
+            .options(joinedload(CacheWarmCheck.environment).joinedload(Environment.project))
+            .order_by(CacheWarmCheck.checked_at.desc())
+        )
+        if environment_id is not None:
+            query = query.where(CacheWarmCheck.environment_id == environment_id)
+        if project_id is not None:
+            query = query.where(CacheWarmCheck.environment.has(Environment.project_id == project_id))
+        if status == "ok":
+            query = query.where(CacheWarmCheck.ok.is_(True))
+        elif status == "fail":
+            query = query.where(CacheWarmCheck.ok.is_(False))
+        if since in HEALTH_CHECK_TIME_PRESETS:
+            cutoff = datetime.now(timezone.utc) - HEALTH_CHECK_TIME_PRESETS[since]
+            query = query.where(CacheWarmCheck.checked_at >= cutoff)
+
+        allowed_project_ids = get_allowed_project_ids(db, request)
+        if allowed_project_ids is not None:
+            query = query.where(
+                CacheWarmCheck.environment.has(Environment.project_id.in_(allowed_project_ids))
+            )
+
+        checks = db.scalars(query.limit(500)).all()
+
+        filtered_environment = None
+        if environment_id is not None:
+            filtered_environment = db.get(Environment, environment_id)
+
+        projects_query = select(Project).order_by(Project.name)
+        if allowed_project_ids is not None:
+            projects_query = projects_query.where(Project.id.in_(allowed_project_ids))
+        projects = db.scalars(projects_query).all()
+
+        non_environment_params = {
+            key: value
+            for key, value in {"project_id": project_id, "status": status, "since": since}.items()
+            if value
+        }
+        clear_environment_url = "/cache-warm-checks"
+        if non_environment_params:
+            clear_environment_url += "?" + urlencode(non_environment_params)
+
+        return templates.TemplateResponse(
+            request,
+            "cache_warm_checks.html",
+            {
+                "checks": checks,
+                "filtered_environment": filtered_environment,
+                "clear_environment_url": clear_environment_url,
+                "projects": projects,
+                "selected_project_id": project_id,
+                "selected_status": status,
+                "selected_since": since,
+            },
+        )
+
+
+@app.get("/cache-warm-checks/{check_id}")
+def cache_warm_check_detail(check_id: int, request: Request):
+    with SessionLocal() as db:
+        check = _get_cache_warm_check_or_404(db, check_id, request)
+        summary = json.loads(check.summary_json) if check.summary_json else {}
+        return templates.TemplateResponse(
+            request,
+            "cache_warm_check_detail.html",
+            {
+                "check": check,
+                "check_json": _cache_warm_check_to_dict(check),
+                "failures": summary.get("failures") or [],
+            },
+        )
+
+
+@app.get("/cache-warm-checks/{check_id}/json")
+def cache_warm_check_json(check_id: int, request: Request):
+    with SessionLocal() as db:
+        check = _get_cache_warm_check_or_404(db, check_id, request)
+        return JSONResponse(_cache_warm_check_to_dict(check))
 
 
 @app.get("/projects/{project_id}/compare")

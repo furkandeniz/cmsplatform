@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Cache Isıtma Detayı · {{ check.environment.name }} · CMSPlus{% endblock %}
+
+{% block content %}
+<a href="/cache-warm-checks?environment_id={{ check.environment.id }}" class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 mb-4 transition">
+  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+    <path fill-rule="evenodd" d="M12.79 4.21a.75.75 0 0 1 0 1.06L8.06 10l4.73 4.73a.75.75 0 1 1-1.06 1.06l-5.26-5.26a.75.75 0 0 1 0-1.06l5.26-5.26a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" />
+  </svg>
+  {{ check.environment.name }} cache ısıtma geçmişine dön
+</a>
+
+<div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+  <div class="flex items-start justify-between gap-4 flex-wrap">
+    <div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <h1 class="text-xl font-bold text-slate-900">{{ check.environment.project.name }} · {{ check.environment.name }}</h1>
+        {% if not check.ok %}
+        <span class="inline-flex items-center gap-1 text-xs font-medium text-red-700 bg-red-50 px-2 py-0.5 rounded-full">Başarısız</span>
+        {% endif %}
+      </div>
+      <a href="{{ check.environment.url }}" target="_blank" rel="noopener noreferrer"
+         class="text-sm text-slate-500 hover:text-brand-600 transition break-all">
+        {{ check.environment.url }}
+      </a>
+      <p class="text-xs text-slate-400 mt-1">
+        {{ check.checked_at.strftime('%d.%m.%Y %H:%M:%S') }}
+        {% if check.duration_ms is not none %} · {{ (check.duration_ms / 1000)|round(1) }}s{% endif %}
+      </p>
+    </div>
+    <a href="/cache-warm-checks/{{ check.id }}/json" target="_blank" rel="noopener noreferrer"
+       class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 px-3 py-2 rounded-lg transition">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M4.5 2A1.5 1.5 0 0 0 3 3.5v13A1.5 1.5 0 0 0 4.5 18h11a1.5 1.5 0 0 0 1.5-1.5V7.621a1.5 1.5 0 0 0-.44-1.06l-4.622-4.622A1.5 1.5 0 0 0 10.878 1.5H4.5ZM6 12a1 1 0 1 0 0 2h1a1 1 0 1 0 0-2H6Zm0-3a1 1 0 1 0 0 2h5a1 1 0 1 0 0-2H6Z" clip-rule="evenodd" />
+      </svg>
+      Ham JSON
+    </a>
+  </div>
+
+  {% if not check.ok %}
+  <div class="mt-5 pt-5 border-t border-slate-100">
+    <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">Hata</p>
+    <p class="text-sm text-red-700 bg-red-50 rounded-lg px-3 py-2">{{ check.error }}</p>
+  </div>
+  {% else %}
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-5 border-t border-slate-100">
+    <div class="text-center">
+      <p class="text-2xl font-bold text-slate-800">{{ check.url_count if check.url_count is not none else '—' }}</p>
+      <p class="text-xs font-medium text-slate-500 mt-1">Sayfa Sayısı</p>
+    </div>
+    <div class="text-center">
+      <p class="text-2xl font-bold text-emerald-600">{{ check.success if check.success is not none else '—' }}</p>
+      <p class="text-xs font-medium text-slate-500 mt-1">Başarılı İstek</p>
+    </div>
+    <div class="text-center">
+      <p class="text-2xl font-bold {% if check.failed %}text-red-600{% else %}text-slate-800{% endif %}">{{ check.failed if check.failed is not none else '—' }}</p>
+      <p class="text-xs font-medium text-slate-500 mt-1">Başarısız İstek</p>
+    </div>
+    <div class="text-center">
+      <p class="text-2xl font-bold text-slate-800">
+        {% if check.hit_ratio is not none %}{{ (check.hit_ratio * 100)|round(0) }}%{% else %}—{% endif %}
+      </p>
+      <p class="text-xs font-medium text-slate-500 mt-1">Cache Hit Oranı</p>
+    </div>
+  </div>
+
+  <div class="flex items-center gap-4 mt-4 text-xs text-slate-500 flex-wrap">
+    <span>Hit: <span class="font-semibold text-slate-700">{{ check.cache_hits if check.cache_hits is not none else '—' }}</span></span>
+    <span>Miss: <span class="font-semibold text-slate-700">{{ check.cache_misses if check.cache_misses is not none else '—' }}</span></span>
+    <span>Bypass: <span class="font-semibold text-slate-700">{{ check.cache_bypass if check.cache_bypass is not none else '—' }}</span></span>
+    <span>Bilinmiyor: <span class="font-semibold text-slate-700">{{ check.unknown_cache_state if check.unknown_cache_state is not none else '—' }}</span></span>
+  </div>
+
+  <div class="mt-6 pt-5 border-t border-slate-100">
+    <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Başarısız İstekler ({{ failures|length }})</p>
+    {% if failures %}
+    <ul class="space-y-2 max-h-96 overflow-y-auto">
+      {% for failure in failures %}
+      <li class="text-sm">
+        <p class="text-slate-800 font-mono text-xs break-all">{{ failure.url }}</p>
+        <p class="text-xs text-red-600 mt-0.5">
+          {% if failure.status %}{{ failure.status }} — {% endif %}{{ failure.err }}
+        </p>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-sm text-emerald-700">Başarısız istek yok.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<div class="mt-6">
+  <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">JSON</h2>
+  <div class="bg-slate-900 rounded-2xl p-5 overflow-x-auto">
+    <pre class="text-xs text-slate-100 leading-relaxed"><code>{{ check_json | tojson_pretty }}</code></pre>
+  </div>
+</div>
+{% endblock %}

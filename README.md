@@ -8,6 +8,9 @@ yoktur.
 
 ## Özellikler
 
+- **Kullanıcı girişi ve yetkilendirme** — E-posta/şifre ile session tabanlı giriş (bkz.
+  [Kullanıcılar ve yetkilendirme](#kullanıcılar-ve-yetkilendirme)). Admin rolü tüm projeleri görür ve
+  yönetir; Kullanıcı rolü sadece kendisine atanan projeleri görür.
 - **Proje & ortam yönetimi** — Her proje birden çok ortama sahip olabilir (Production, Staging, Development...).
   Bir ortam "birincil" (primary) olarak işaretlenir ve proje kartlarında özet gösterilir.
 - **Sağlık kontrolü** — HTTP isteği atıp durum kodu, yanıt süresi, response header/body'yi kaydeder (`httpx`).
@@ -16,6 +19,10 @@ yoktur.
   görsel alt metinleri gibi sinyalleri çıkarır, eksiklere göre 0-100 arası bir skor hesaplar.
 - **Lighthouse denetimi** — Node.js tabanlı Lighthouse'u subprocess olarak çalıştırıp performans/erişilebilirlik/
   best-practices/SEO skorlarını ve en kötü audit'leri kaydeder.
+- **Cache ısıtma** — [gowarm](https://github.com/tarikflz/gowarm) (Go) subprocess olarak çalıştırılır: ortamın
+  sitemap'indeki her URL, tanımlanan cookie/header kombinasyonlarıyla ("axes" — örn. region×language) gezilip
+  origin/CDN cache'i ısıtılır; cache hit/miss durumu response header'larından (`CF-Cache-Status`,
+  `X-Drupal-Cache` vb.) okunup özetlenir.
 - **Ortamlar arası görsel karşılaştırma** — Aynı path'in iki ortamdaki (örn. Staging vs Production) ekran görüntüsünü
   alıp piksel bazında karşılaştırır; farklı bölgeleri kırmızı kutularla işaretleyip fark yüzdesini raporlar
   (`Pillow` + `numpy`).
@@ -23,7 +30,7 @@ yoktur.
   Tamamen deterministiktir, yapay zeka içermez; her adım doğrudan bir Playwright komutuna karşılık gelir. İlk
   başarısız adımda durur, hata mesajı ve ekran görüntüsüyle birlikte çalıştırma geçmişine kaydedilir. Çalıştırma
   geçmişi sunucu taraflı sayfalanır (10 kayıt/sayfa).
-- **Cron job'lar** — Her ortam için health/ssl/seo/lighthouse/senaryo kontrollerinden biri, belirli bir sıklıkta
+- **Cron job'lar** — Her ortam için health/ssl/seo/lighthouse/cache ısıtma/senaryo kontrollerinden biri, belirli bir sıklıkta
   (15dk / 1sa / 6sa / günlük / haftalık) otomatik çalışacak şekilde zamanlanabilir (`APScheduler`, uygulama süreci
   ayakta olduğu sürece çalışır — ayrı bir worker gerekmez). Durum değişince (başarılıdan başarısıza veya tersi)
   isteğe bağlı olarak e-posta uyarısı gönderilir.
@@ -31,11 +38,14 @@ yoktur.
 ## Stack
 
 - FastAPI + Jinja2 (server-rendered, Tailwind CDN)
+- Starlette `SessionMiddleware` (imzalı çerez) + stdlib `hashlib.pbkdf2_hmac` ile oturum/şifre yönetimi
+  (`itsdangerous`, ekstra bir auth kütüphanesi yok)
 - PostgreSQL + SQLAlchemy 2.0 (Docker Compose ile; Alembic yok — şema değişiklikleri elle `ALTER TABLE` gerektirir,
   bkz. [Geliştirme notları](#geliştirme-notları))
 - httpx (sağlık kontrolü), cryptography (SSL kontrolü), Playwright (SEO taraması + senaryolar + görsel karşılaştırma
   için ekran görüntüsü), pandas (SEO/Lighthouse raporlama)
 - Node.js + Lighthouse (performans/erişilebilirlik/best-practices/SEO denetimi)
+- Go + gowarm (sitemap tabanlı cache ısıtma; PyYAML ile config üretilir)
 - APScheduler (ortam başına zamanlanmış cron job'lar)
 - smtplib (stdlib) ile cron job bildirim e-postaları
 - Pillow + numpy ile ortamlar arası görsel karşılaştırma (fark tespiti ve işaretleme)
@@ -50,6 +60,10 @@ cp .env.example .env
 
 cd lighthouse && npm install && cd ..     # Lighthouse raporu için gerekli (Node.js >= 18.16)
 
+# Cache ısıtma için gerekli (Go >= 1.24) — binary'yi derleyip cache_warmer/bin/gowarm olarak kurar
+GOBIN="$(pwd)/cache_warmer/bin" go install github.com/tarikflz/gowarm/cmd@latest
+mv cache_warmer/bin/cmd cache_warmer/bin/gowarm
+
 docker compose up -d db
 
 .venv/bin/uvicorn app.main:app --reload
@@ -62,6 +76,7 @@ Uygulama http://127.0.0.1:8000 adresinde çalışır.
 | Değişken | Açıklama |
 | --- | --- |
 | `DATABASE_URL` | SQLAlchemy bağlantı dizesi (`postgresql+psycopg2://...`). Varsayılan, `docker-compose.yml`'deki `db` servisiyle eşleşir. |
+| `SECRET_KEY` | Oturum çerezini imzalamak için kullanılır; rastgele, uzun bir değer olmalı (ör. `python3 -c "import secrets; print(secrets.token_hex(32))"`). Boş bırakılırsa güvensiz bir varsayılana düşer — üretimde mutlaka set edilmeli. |
 | `SMTP_HOST` | Cron job bildirim e-postaları için SMTP sunucusu. Boş bırakılırsa e-posta gönderilmez, sadece loglanır — geliştirme sırasında hata vermez. |
 | `SMTP_PORT` | Varsayılan `587`. |
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | SMTP kimlik bilgileri (ör. Gmail için normal şifre yerine bir [uygulama şifresi](https://myaccount.google.com/apppasswords)). |
@@ -77,6 +92,9 @@ Uygulama http://127.0.0.1:8000 adresinde çalışır.
   görevi gibi PATH'i miras almayan bir ortamdan başlatılıyorsa `PATH`'in Node'un `bin` dizinini içerdiğinden emin ol.
 - **Playwright ile ilgili hatalar (senaryo/SEO/görsel karşılaştırma çalışmıyor)** — `playwright install chromium`
   komutunun çalıştırıldığından emin ol.
+- **"gowarm binary bulunamadı"** — `cache_warmer/bin/gowarm` derlenmemiş demektir; Kurulum bölümündeki `go install`
+  adımını çalıştır (Node PATH sorununun eşleniği — binary repo-relative sabit bir path'te arandığı için `PATH`
+  sorunu yaşanmaz, sadece derlenmiş olması yeterli).
 
 ## Yapı
 
@@ -84,12 +102,15 @@ Uygulama http://127.0.0.1:8000 adresinde çalışır.
 app/
   main.py                FastAPI app ve tüm route'lar (proje/ortam CRUD, kontroller, senaryolar, cron job'lar, karşılaştırmalar)
   database.py             SQLAlchemy engine/session (DATABASE_URL, Base.metadata.create_all)
-  models.py                Project, Environment, HealthCheck, SeoCheck, LighthouseCheck, CronJob,
-                            EnvironmentComparison/ComparisonPage, Scenario/ScenarioStep/ScenarioRun/ScenarioStepResult
+  auth.py                 Şifre hash/verify, oturum yardımcıları (get_allowed_project_ids, require_admin), seed
+  models.py                User, Project, Environment, HealthCheck, SeoCheck, LighthouseCheck, CacheWarmCheck,
+                            CronJob, EnvironmentComparison/ComparisonPage, Scenario/ScenarioStep/ScenarioRun/
+                            ScenarioStepResult
   health_check.py          httpx ile sağlık kontrolü
   ssl_check.py              SSL sertifika kontrolü
   seo_check.py             Playwright ile SEO extraction + skor hesaplama
   lighthouse_check.py      Node/Lighthouse subprocess wrapper
+  cache_warm_check.py      Go/gowarm subprocess wrapper (config.yaml üretimi + summary JSON parse)
   visual_compare.py        Playwright ile ekran görüntüsü + Pillow/numpy ile fark tespiti
   scenario_runner.py       Playwright ile kural tabanlı senaryo/adım çalıştırma motoru
   scheduler.py             APScheduler kurulumu + cron job çalıştırma + durum değişiminde e-posta bildirimi
@@ -99,15 +120,41 @@ app/
 lighthouse/
   run.mjs          Lighthouse'u çalıştırıp JSON raporu stdout'a yazan Node script'i
   package.json     lighthouse + chrome-launcher bağımlılıkları
+cache_warmer/
+  bin/gowarm       `go install` ile derlenen binary (git'e dahil değil, bkz. Kurulum)
 ```
+
+## Kullanıcılar ve yetkilendirme
+
+Uygulamanın tamamı (statik dosyalar hariç) girişe kapalıdır; girişsiz istekler `/login`'e yönlendirilir. İki rol
+vardır:
+
+- **Admin** — tüm projeleri görür, proje/ortam oluşturur-düzenler-siler, `/users` sayfasından kullanıcı
+  ekler/düzenler/siler.
+- **Kullanıcı** — sadece kendisine atanan projeleri görür (proje listesi, sağlık/SEO/Lighthouse/cache ısıtma
+  geçmişi, senaryolar dahil her yerde filtrelenir; atanmamış bir projeye doğrudan URL ile de erişemez, 404 döner);
+  atandığı projelerde mevcut özellikleri kullanabilir (kontrol/senaryo çalıştırma, cron job) ama proje/ortam
+  oluşturma-düzenleme-silme ve kullanıcı yönetimi admin'e özeldir.
+
+İlk açılışta bir varsayılan admin kullanıcısı otomatik oluşturulur (bkz. `app/auth.py` — `DEFAULT_USER_EMAIL`/
+`DEFAULT_USER_PASSWORD`); bu satır zaten varsa tekrar oluşturulmaz. Şifreler stdlib `hashlib.pbkdf2_hmac` ile
+salt'lı hash'lenip saklanır. Proje görünürlüğü, `app/main.py`'deki `_get_project_or_404`/`_get_environment_or_404`
+gibi tek noktadan geçen yardımcı fonksiyonlarda (`app.auth.get_allowed_project_ids`) uygulanır — yeni bir
+proje-scoped route eklerken bu fonksiyonlardan geçtiğinden emin olunmalı, aksi halde erişim kontrolü atlanır.
 
 ## Veri modeli
 
 Her proje (`Project`) bir veya daha fazla ortama (`Environment`) sahiptir. URL bilgisi ve isteğe bağlı bir
 CMS/sürüm notu (`drupal_version` alanı — Drupal projeleri için düşünülmüş olsa da boş bırakılabilir, herhangi bir
-site için zorunlu değildir) ortam seviyesinde tutulur; her ortamın son sağlık/SSL/SEO/Lighthouse kontrol sonucu, hızlı erişim için doğrudan
-`Environment` satırında da önbelleklenir (`last_check_ok`, `ssl_days_remaining`, `last_seo_score` vb.), ayrıca
-tam geçmiş ayrı tablolarda (`HealthCheck`, `SeoCheck`, `LighthouseCheck`) tutulur.
+site için zorunlu değildir) ortam seviyesinde tutulur; her ortamın son sağlık/SSL/SEO/Lighthouse/cache ısıtma kontrol
+sonucu, hızlı erişim için doğrudan `Environment` satırında da önbelleklenir (`last_check_ok`, `ssl_days_remaining`,
+`last_seo_score`, `last_cache_warm_ok` vb.), ayrıca tam geçmiş ayrı tablolarda (`HealthCheck`, `SeoCheck`,
+`LighthouseCheck`, `CacheWarmCheck`) tutulur.
+
+**Cache ısıtma** isteğe bağlıdır: bir ortamın `cache_warm_sitemap_url` ve `cache_warm_axes_yaml` (gowarm'ın
+`axes:` YAML listesi — hangi cookie/header kombinasyonlarıyla ısıtılacağını tanımlar) alanları ortam düzenleme
+formundan doldurulmadan "Cache Isıt" çalıştırılamaz. Sonuç (`CacheWarmCheck`) toplam/başarılı/başarısız istek
+sayısını, cache hit/miss/bypass/unknown sayaçlarını, hit oranını ve başarısız isteklerin listesini içerir.
 
 Bir projede 2+ ortam varsa, proje sayfasından "Ortamları Karşılaştır" ile bir `EnvironmentComparison` oluşturulur:
 seçilen path'ler (`ComparisonPage`) her iki ortamın URL'sine eklenip ekran görüntüsü alınır, piksel bazında
@@ -117,9 +164,9 @@ Her ortamda ayrıca kural tabanlı **senaryolar** (`Scenario`) tanımlanabilir: 
 oluşur, "Çalıştır" ile Playwright üzerinden sırayla işletilir; her çalıştırma (`ScenarioRun`) ve her adımın sonucu
 (`ScenarioStepResult`, açıklama/durum/hata/ekran görüntüsü/süre ile) ayrı ayrı kaydedilir.
 
-`CronJob`, bir ortam için health/ssl/seo/lighthouse kontrollerinden birini ya da belirli bir `Scenario`'yu belirli
-bir sıklıkta otomatik çalıştırır; `notify_enabled` + `notify_emails` ile durum değişiminde e-posta uyarısı
-gönderilir.
+`CronJob`, bir ortam için health/ssl/seo/lighthouse/cache ısıtma kontrollerinden birini ya da belirli bir
+`Scenario`'yu belirli bir sıklıkta otomatik çalıştırır; `notify_enabled` + `notify_emails` ile durum değişiminde
+e-posta uyarısı gönderilir.
 
 ### Senaryo adım türleri
 
@@ -144,7 +191,7 @@ karşılaştırmak için kullanılır.
 
 ## Zamanlanmış görevler (cron job)
 
-Bir ortamın detay sayfasından, o ortam için health/ssl/seo/lighthouse kontrollerinden biri ya da o ortama ait bir
+Bir ortamın detay sayfasından, o ortam için health/ssl/seo/lighthouse/cache ısıtma kontrollerinden biri ya da o ortama ait bir
 senaryo seçilip bir sıklıkla (15 dakika / 1 saat / 6 saat / günlük / haftalık) zamanlanabilir. Uygulama süreci
 ayakta olduğu sürece `APScheduler` bu job'ları arka planda çalıştırır — ayrı bir worker/cron daemon'a gerek yoktur,
 ama bu da uygulama yeniden başladığında zamanlayıcının sıfırdan kurulduğu (kaçırılan çalıştırmaların telafi

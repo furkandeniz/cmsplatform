@@ -43,6 +43,29 @@
              class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
     </div>
 
+    <div class="pt-2 border-t border-slate-100">
+      <p class="text-sm font-semibold text-slate-700 mb-3">Cache Isıtma (opsiyonel)</p>
+      <div class="space-y-4">
+        <div>
+          <label for="cache_warm_sitemap_url" class="block text-sm font-medium text-slate-700 mb-1.5">Sitemap URL</label>
+          <input type="url" id="cache_warm_sitemap_url" name="cache_warm_sitemap_url" placeholder="https://example.com/sitemap.xml"
+                 value="{{ environment.cache_warm_sitemap_url or '' if environment else '' }}"
+                 class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
+        </div>
+        <div>
+          <label for="cache_warm_axes_yaml" class="block text-sm font-medium text-slate-700 mb-1.5">Axes Yapılandırması (YAML)</label>
+          <textarea id="cache_warm_axes_yaml" name="cache_warm_axes_yaml" rows="6"
+                    placeholder="- name: region&#10;  cookie_name: region&#10;  transform: upper&#10;  values: [on, mb, qc, ab]"
+                    class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm font-mono placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition">{{ environment.cache_warm_axes_yaml or '' if environment else '' }}</textarea>
+          <p class="text-xs text-slate-400 mt-1">
+            <a href="https://github.com/tarikflz/gowarm#the-axis-model" target="_blank" rel="noopener noreferrer" class="text-brand-600 hover:text-brand-700">gowarm axes formatı</a> —
+            her sayfayı hangi cookie/header kombinasyonlarıyla ısıtacağını tanımlar. Her ikisi de dolu olduğunda
+            ortam sayfasından "Cache Isıt" çalıştırılabilir.
+          </p>
+        </div>
+      </div>
+    </div>
+
     <div class="flex items-center gap-3 pt-2">
       <button type="submit"
               class="bg-brand-600 text-white text-sm font-medium px-4 py-2.5 rounded-lg shadow-sm hover:bg-brand-700 hover:shadow transition">

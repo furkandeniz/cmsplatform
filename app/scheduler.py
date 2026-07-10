@@ -7,6 +7,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import select
 
+from app.cache_warm_check import run_cache_warm_check
 from app.database import SessionLocal
 from app.email_notify import BASE_URL, parse_recipients, send_alert_email
 from app.health_check import run_health_check
@@ -23,6 +24,7 @@ CHECK_TYPE_LABELS = {
     "ssl": "SSL Kontrolü",
     "seo": "SEO Kontrolü",
     "lighthouse": "Lighthouse",
+    "cache_warm": "Cache Isıtma",
     "scenario": "Senaryo",
 }
 
@@ -31,6 +33,7 @@ CHECK_RUNNERS = {
     "ssl": run_ssl_check,
     "seo": run_seo_check,
     "lighthouse": run_lighthouse_check,
+    "cache_warm": run_cache_warm_check,
 }
 
 CHECK_OK_ATTR = {
@@ -38,6 +41,7 @@ CHECK_OK_ATTR = {
     "ssl": "ssl_ok",
     "seo": "last_seo_ok",
     "lighthouse": "last_lighthouse_ok",
+    "cache_warm": "last_cache_warm_ok",
 }
 
 CHECK_ERROR_ATTR = {
@@ -45,6 +49,7 @@ CHECK_ERROR_ATTR = {
     "ssl": "ssl_error",
     "seo": "last_seo_error",
     "lighthouse": "last_lighthouse_error",
+    "cache_warm": "last_cache_warm_error",
 }
 
 FREQUENCY_LABELS = {
