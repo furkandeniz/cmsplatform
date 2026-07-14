@@ -1,6 +1,7 @@
 import json
 import os
 import shutil
+import threading
 import uuid
 from datetime import datetime, timedelta, timezone
 from math import ceil
@@ -38,6 +39,7 @@ from app.models import (
     EnvironmentComparison,
     HealthCheck,
     LighthouseCheck,
+    PriceAudit,
     Project,
     Scenario,
     ScenarioRun,
@@ -45,6 +47,7 @@ from app.models import (
     SeoCheck,
     User,
 )
+from app.price_audit import run_price_audit_background, start_price_audit
 from app.scenario_runner import OPERATOR_LABELS as SCENARIO_OPERATOR_LABELS
 from app.scenario_runner import SCREENSHOT_DIR as SCENARIO_SCREENSHOT_DIR
 from app.scenario_runner import STEP_TYPE_LABELS as SCENARIO_STEP_TYPE_LABELS
@@ -522,6 +525,13 @@ def update_environment(
     drupal_version: Optional[str] = Form(None),
     cache_warm_sitemap_url: Optional[str] = Form(None),
     cache_warm_axes_yaml: Optional[str] = Form(None),
+    price_audit_listing_path: Optional[str] = Form(None),
+    price_audit_link_pattern: Optional[str] = Form(None),
+    price_audit_upfront_selector: Optional[str] = Form(None),
+    price_audit_financing_selector: Optional[str] = Form(None),
+    price_audit_price_selector: Optional[str] = Form(None),
+    price_audit_color_selector: Optional[str] = Form(None),
+    price_audit_capacity_selector: Optional[str] = Form(None),
 ):
     require_admin(request)
     with SessionLocal() as db:
@@ -531,6 +541,13 @@ def update_environment(
         environment.drupal_version = (drupal_version or "").strip() or None
         environment.cache_warm_sitemap_url = (cache_warm_sitemap_url or "").strip() or None
         environment.cache_warm_axes_yaml = (cache_warm_axes_yaml or "").strip() or None
+        environment.price_audit_listing_path = (price_audit_listing_path or "").strip() or None
+        environment.price_audit_link_pattern = (price_audit_link_pattern or "").strip() or None
+        environment.price_audit_upfront_selector = (price_audit_upfront_selector or "").strip() or None
+        environment.price_audit_financing_selector = (price_audit_financing_selector or "").strip() or None
+        environment.price_audit_price_selector = (price_audit_price_selector or "").strip() or None
+        environment.price_audit_color_selector = (price_audit_color_selector or "").strip() or None
+        environment.price_audit_capacity_selector = (price_audit_capacity_selector or "").strip() or None
         db.commit()
     return RedirectResponse(url=f"/projects/{project_id}", status_code=HTTP_303_SEE_OTHER)
 
@@ -599,6 +616,34 @@ def check_environment_cache_warm(project_id: int, environment_id: int, request: 
         run_cache_warm_check(environment)
         db.commit()
     return RedirectResponse(url=f"/projects/{project_id}", status_code=HTTP_303_SEE_OTHER)
+
+
+@app.post("/projects/{project_id}/environments/{environment_id}/price-audit")
+def check_environment_price_audit(
+    project_id: int,
+    environment_id: int,
+    request: Request,
+    excel_file: UploadFile = File(...),
+):
+    excel_bytes = excel_file.file.read()
+    excel_filename = excel_file.filename or "excel.xlsx"
+    with SessionLocal() as db:
+        environment = _get_environment_or_404(db, project_id, environment_id, request)
+        environment_id_value = environment.id
+        audit = start_price_audit(environment, excel_bytes, excel_filename)
+        db.commit()
+        db.refresh(audit)
+        audit_id = audit.id
+        is_running = audit.status == "running"
+
+    if is_running:
+        threading.Thread(
+            target=run_price_audit_background,
+            args=(environment_id_value, audit_id, excel_bytes),
+            daemon=True,
+        ).start()
+
+    return RedirectResponse(url=f"/price-audits/{audit_id}", status_code=HTTP_303_SEE_OTHER)
 
 
 @app.post("/projects/{project_id}/environments/{environment_id}/set-primary")
@@ -1389,6 +1434,129 @@ def cache_warm_check_json(check_id: int, request: Request):
     with SessionLocal() as db:
         check = _get_cache_warm_check_or_404(db, check_id, request)
         return JSONResponse(_cache_warm_check_to_dict(check))
+
+
+def _get_price_audit_or_404(db: Session, audit_id: int, request: Request) -> PriceAudit:
+    audit = db.get(PriceAudit, audit_id)
+    if audit is None:
+        raise HTTPException(status_code=404, detail="Fiyat denetimi kaydı bulunamadı")
+    _check_project_access(db, request, audit.environment.project_id)
+    return audit
+
+
+def _price_audit_to_dict(audit: PriceAudit) -> dict:
+    return {
+        "id": audit.id,
+        "project": audit.environment.project.name,
+        "environment": audit.environment.name,
+        "url": audit.environment.url,
+        "created_at": audit.created_at.isoformat(),
+        "excel_filename": audit.excel_filename,
+        "status": audit.status,
+        "total_products": audit.total_products,
+        "completed_products": audit.completed_products,
+        "current_product_label": audit.current_product_label,
+        "ok": audit.ok,
+        "error": audit.error,
+        "duration_ms": audit.duration_ms,
+        "product_count": audit.product_count,
+        "excel_row_count": audit.excel_row_count,
+        "matched_count": audit.matched_count,
+        "mismatched_count": audit.mismatched_count,
+        "only_in_site_count": audit.only_in_site_count,
+        "only_in_excel_count": audit.only_in_excel_count,
+        "results": json.loads(audit.results_json) if audit.results_json else None,
+    }
+
+
+@app.get("/price-audits")
+def price_audits_list(
+    request: Request,
+    environment_id: Optional[int] = None,
+    project_id: Optional[int] = None,
+    status: Optional[str] = None,
+):
+    with SessionLocal() as db:
+        query = (
+            select(PriceAudit)
+            .options(joinedload(PriceAudit.environment).joinedload(Environment.project))
+            .order_by(PriceAudit.created_at.desc())
+        )
+        if environment_id is not None:
+            query = query.where(PriceAudit.environment_id == environment_id)
+        if project_id is not None:
+            query = query.where(PriceAudit.environment.has(Environment.project_id == project_id))
+        if status == "ok":
+            query = query.where(PriceAudit.status == "completed", PriceAudit.ok.is_(True))
+        elif status == "fail":
+            query = query.where(PriceAudit.status == "failed")
+        elif status == "running":
+            query = query.where(PriceAudit.status == "running")
+
+        allowed_project_ids = get_allowed_project_ids(db, request)
+        if allowed_project_ids is not None:
+            query = query.where(
+                PriceAudit.environment.has(Environment.project_id.in_(allowed_project_ids))
+            )
+
+        audits = db.scalars(query.limit(200)).all()
+
+        filtered_environment = None
+        if environment_id is not None:
+            filtered_environment = db.get(Environment, environment_id)
+
+        projects_query = select(Project).order_by(Project.name)
+        if allowed_project_ids is not None:
+            projects_query = projects_query.where(Project.id.in_(allowed_project_ids))
+        projects = db.scalars(projects_query).all()
+
+        non_environment_params = {
+            key: value
+            for key, value in {"project_id": project_id, "status": status}.items()
+            if value
+        }
+        clear_environment_url = "/price-audits"
+        if non_environment_params:
+            clear_environment_url += "?" + urlencode(non_environment_params)
+
+        return templates.TemplateResponse(
+            request,
+            "price_audits.html",
+            {
+                "audits": audits,
+                "filtered_environment": filtered_environment,
+                "clear_environment_url": clear_environment_url,
+                "projects": projects,
+                "selected_project_id": project_id,
+                "selected_status": status,
+            },
+        )
+
+
+@app.get("/price-audits/{audit_id}")
+def price_audit_detail(audit_id: int, request: Request):
+    with SessionLocal() as db:
+        audit = _get_price_audit_or_404(db, audit_id, request)
+        results = json.loads(audit.results_json) if audit.results_json else {}
+        return templates.TemplateResponse(
+            request,
+            "price_audit_detail.html",
+            {
+                "audit": audit,
+                "audit_json": _price_audit_to_dict(audit),
+                "matched": results.get("matched") or [],
+                "only_in_site": results.get("only_in_site") or [],
+                "only_in_excel": results.get("only_in_excel") or [],
+                "errors": results.get("errors") or [],
+            },
+        )
+
+
+@app.get("/price-audits/{audit_id}/json")
+def price_audit_json(audit_id: int, request: Request):
+    with SessionLocal() as db:
+        audit = _get_price_audit_or_404(db, audit_id, request)
+        return JSONResponse(_price_audit_to_dict(audit))
 
 
 @app.get("/projects/{project_id}/compare")

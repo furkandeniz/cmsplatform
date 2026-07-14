@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 .env
+.DS_Store
 lighthouse/node_modules/
 cache_warmer/bin/
 app/static/uploads/

@@ -107,6 +107,19 @@ class Environment(Base):
     last_cache_warm_failed: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     last_cache_warm_hit_ratio: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
+    price_audit_listing_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    price_audit_link_pattern: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    price_audit_upfront_selector: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    price_audit_financing_selector: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    price_audit_price_selector: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    price_audit_color_selector: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    price_audit_capacity_selector: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    last_price_audit_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_price_audit_ok: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    last_price_audit_error: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    last_price_audit_matched: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    last_price_audit_mismatched: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
     project: Mapped["Project"] = relationship(back_populates="environments")
     health_checks: Mapped[List["HealthCheck"]] = relationship(
         back_populates="environment",
@@ -127,6 +140,11 @@ class Environment(Base):
         back_populates="environment",
         cascade="all, delete-orphan",
         order_by="desc(CacheWarmCheck.checked_at)",
+    )
+    price_audits: Mapped[List["PriceAudit"]] = relationship(
+        back_populates="environment",
+        cascade="all, delete-orphan",
+        order_by="desc(PriceAudit.created_at)",
     )
     cron_jobs: Mapped[List["CronJob"]] = relationship(
         back_populates="environment",
@@ -251,6 +269,38 @@ class CacheWarmCheck(Base):
     summary_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     environment: Mapped["Environment"] = relationship(back_populates="cache_warm_checks")
+
+
+class PriceAudit(Base):
+    __tablename__ = "price_audits"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    environment_id: Mapped[int] = mapped_column(
+        ForeignKey("environments.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    excel_filename: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    ok: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    error: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    duration_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="running")
+    total_products: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    completed_products: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    current_product_label: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
+    product_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    excel_row_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    matched_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    mismatched_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    only_in_site_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    only_in_excel_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    results_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    environment: Mapped["Environment"] = relationship(back_populates="price_audits")
 
 
 class CronJob(Base):

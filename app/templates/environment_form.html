@@ -66,6 +66,79 @@
       </div>
     </div>
 
+    <div class="pt-2 border-t border-slate-100">
+      <p class="text-sm font-semibold text-slate-700 mb-3">Fiyat Denetimi (opsiyonel)</p>
+      <div class="space-y-4">
+        <div>
+          <label for="price_audit_listing_path" class="block text-sm font-medium text-slate-700 mb-1.5">Listeleme Sayfası Yolu</label>
+          <input type="text" id="price_audit_listing_path" name="price_audit_listing_path" placeholder="/en/phones"
+                 value="{{ environment.price_audit_listing_path or '' if environment else '' }}"
+                 class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm font-mono placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
+        </div>
+        <div>
+          <label for="price_audit_link_pattern" class="block text-sm font-medium text-slate-700 mb-1.5">Ürün Link Deseni (regex)</label>
+          <input type="text" id="price_audit_link_pattern" name="price_audit_link_pattern" placeholder="^/en/phones/[^/?]+/[^/?]+"
+                 value="{{ environment.price_audit_link_pattern or '' if environment else '' }}"
+                 class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm font-mono placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
+          <p class="text-xs text-slate-400 mt-1">Listeleme sayfasındaki tüm linkler bu regex'e göre filtrelenir; sayfa kaydırılarak (infinite scroll) tüm ürünler toplanır.</p>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="price_audit_upfront_selector" class="block text-sm font-medium text-slate-700 mb-1.5">Peşin Fiyat Seçici</label>
+            <input type="text" id="price_audit_upfront_selector" name="price_audit_upfront_selector" placeholder="#label-upfront"
+                   value="{{ environment.price_audit_upfront_selector or '' if environment else '' }}"
+                   class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm font-mono placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
+          </div>
+          <div>
+            <label for="price_audit_financing_selector" class="block text-sm font-medium text-slate-700 mb-1.5">Taksitli Fiyat Seçici</label>
+            <input type="text" id="price_audit_financing_selector" name="price_audit_financing_selector" placeholder="#label-financing"
+                   value="{{ environment.price_audit_financing_selector or '' if environment else '' }}"
+                   class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm font-mono placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
+          </div>
+        </div>
+        <div>
+          <label for="price_audit_price_selector" class="block text-sm font-medium text-slate-700 mb-1.5">Fiyat Okuma Seçici</label>
+          <input type="text" id="price_audit_price_selector" name="price_audit_price_selector" placeholder="#priceBar-pdp-price"
+                 value="{{ environment.price_audit_price_selector or '' if environment else '' }}"
+                 class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm font-mono placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
+          <p class="text-xs text-slate-400 mt-1">
+            Peşin/Taksitli Fiyat seçicilerine tıklandıktan sonra bu seçiciden okunan değer, o ödeme türünün
+            fiyatı sayılır (aynı eleman farklı seçime göre değişebilir).
+          </p>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="price_audit_color_selector" class="block text-sm font-medium text-slate-700 mb-1.5">Renk Seçenekleri (opsiyonel)</label>
+            <input type="text" id="price_audit_color_selector" name="price_audit_color_selector" placeholder="ul.custom-color label.custom-color-width"
+                   value="{{ environment.price_audit_color_selector or '' if environment else '' }}"
+                   class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm font-mono placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
+          </div>
+          <div>
+            <label for="price_audit_capacity_selector" class="block text-sm font-medium text-slate-700 mb-1.5">Kapasite Seçenekleri (opsiyonel)</label>
+            <input type="text" id="price_audit_capacity_selector" name="price_audit_capacity_selector" placeholder="ul.custom-capacity label.custom-capacity-width"
+                   value="{{ environment.price_audit_capacity_selector or '' if environment else '' }}"
+                   class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm font-mono placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition" />
+          </div>
+        </div>
+        <p class="text-xs text-slate-400">
+          Bir ürünün renk ve/veya kapasite seçenekleri varsa ve her kombinasyonun kendi UPC'si/fiyatı oluyorsa,
+          bu seçiciler <strong>tüm seçenekleri listeleyen</strong> eleman(lar)ı işaret etmeli (tek bir eleman
+          değil — sistem her birine sırayla tıklayıp UPC/fiyatı yeniden okur). Boş bırakılırsa sayfa açıldığındaki
+          varsayılan seçim kullanılır.
+        </p>
+        <div class="bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-3 flex items-center justify-between gap-3">
+          <div>
+            <p class="text-sm font-medium text-slate-700">Örnek Excel</p>
+            <p class="text-xs text-slate-400">UPC Code / Peşin Fiyat / Taksitli Fiyat kolonlarıyla, varyasyon içeren örnek bir dosya.</p>
+          </div>
+          <a href="/static/samples/price_audit_example.xlsx" download
+             class="shrink-0 text-sm font-medium text-brand-600 hover:text-brand-700 bg-white border border-slate-200 px-3 py-2 rounded-lg transition">
+            İndir
+          </a>
+        </div>
+      </div>
+    </div>
+
     <div class="flex items-center gap-3 pt-2">
       <button type="submit"
               class="bg-brand-600 text-white text-sm font-medium px-4 py-2.5 rounded-lg shadow-sm hover:bg-brand-700 hover:shadow transition">
